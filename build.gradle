@@ -1,0 +1,73 @@
+/*
+ * This software is in the public domain under CC0 1.0 Universal plus a 
+ * Grant of Patent License.
+ * 
+ * To the extent possible under law, the author(s) have dedicated all
+ * copyright and related and neighboring rights to this software to the
+ * public domain worldwide. This software is distributed without any
+ * warranty.
+ * 
+ * You should have received a copy of the CC0 Public Domain Dedication
+ * along with this software (see the LICENSE.md file). If not, see
+ * <http://creativecommons.org/publicdomain/zero/1.0/>.
+ */
+
+apply plugin: 'groovy'
+
+sourceCompatibility = '1.7'
+def componentNode = parseComponent(project)
+version = componentNode.'@version'
+def jarBaseName = componentNode.'@name'
+def moquiDir = projectDir.parentFile.parentFile.parentFile
+def frameworkDir = file(moquiDir.absolutePath + '/framework')
+
+// to run use "gradle dependencyUpdates"
+apply plugin: 'com.github.ben-manes.versions'
+buildscript {
+  repositories { jcenter() }
+  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0' }
+}
+dependencyUpdates.resolutionStrategy = { componentSelection { rules -> rules.all { ComponentSelection selection ->
+    boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier -> selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/ }
+    if (rejected) selection.reject('Release candidate')
+} } }
+
+repositories {
+    flatDir name: 'localLib', dirs: frameworkDir.absolutePath + '/lib'
+    jcenter()
+}
+
+dependencies {
+    compile project(':framework')
+
+    // ElasticSearch Libraries, including Lucene
+    compile 'org.elasticsearch:elasticsearch:2.3.3' // Apache 2.0
+    // ElasticSearch uses jackson-dataformat-smile, -yaml, -cbor pulling in jackson-core, also used by OrientDB, but gets an older version
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.7.5'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.7.5'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.7.5'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.7.5'
+    // JNA, needed by ElasticSearch when run embedded
+    compile 'net.java.dev.jna:jna:4.2.2' // Apache 2.0
+    // not currently needed/used: compile 'net.java.dev.jna:jna-platform:4.2.2' // Apache 2.0
+    // NOTE: the lang-groovy module must be in the runtime/elasticsearch/modules directory, not loaded from the classpath; update when updating elasticsearch version!
+    // compile module('org.elasticsearch.module:lang-groovy:2.3.3') // Apache 2.0
+    // NOTE: jts explicit dependency because doesn't get picked up in ElasticSearch, was error without, now seems fine
+    // runtime 'com.vividsolutions:jts:1.13' // LGPL (runtime only, needed by spatial4j)
+}
+
+// by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
+check.dependsOn.remove(test)
+task cleanLib(type: Delete) { delete fileTree(dir: projectDir.absolutePath+'/lib', include: '*') }
+clean.dependsOn cleanLib
+
+jar {
+    destinationDir = file(projectDir.absolutePath + '/lib')
+    baseName = jarBaseName
+}
+task copyDependencies << {
+    copy { from (configurations.runtime - project(':framework').configurations.runtime - project(':framework').jar.archivePath)
+        into file(projectDir.absolutePath + '/lib') }
+}
+copyDependencies.dependsOn cleanLib
+jar.dependsOn copyDependencies
