@@ -45,7 +45,8 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
 
         // set the ElasticSearch home (for config, modules, plugins, scripts, etc), data, and logs directories
         // see https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-dir-layout.html
-        String defaultHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().getPath()
+        // NOTE: could use getPath() instead of toExternalForm().substring(5) for file specific URLs, will work on Windows?
+        String defaultHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().toExternalForm().substring(5)
         if (!System.getProperty("es.path.home")) System.setProperty("es.path.home", defaultHome)
         if (!System.getProperty("es.path.data")) System.setProperty("es.path.data", ecf.runtimePath + "/elasticsearch/data")
         if (!System.getProperty("es.path.logs")) System.setProperty("es.path.logs", ecf.runtimePath + "/log")
