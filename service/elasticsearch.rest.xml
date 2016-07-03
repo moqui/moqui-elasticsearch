@@ -16,7 +16,7 @@ along with this software (see the LICENSE.md file). If not, see
 <!-- General Guideline Verbs: GET=find, POST=create/do, PUT=store (create or update), PATCH=update, DELETE=delete  -->
 
 <resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/rest-api-2.0.xsd"
-        name="elasticsearch" displayName="Moqui ElasticSearch REST API" version="1.0.0"
+        name="search" displayName="Moqui ElasticSearch REST API" version="1.0.0"
         description="Services for DataDocument and DataFeed, including indexing and search using ElasticSearch">
 
     <resource name="dataDocuments" description="Data Documents - Database derived JSON documents, feeds, indexes">
@@ -31,7 +31,7 @@ along with this software (see the LICENSE.md file). If not, see
         <resource name="feeds">
             <id name="dataFeedId">
                 <resource name="index"><method type="post">
-                    <service name="org.moqui.elasticsearch.SearchServices.index#DataFeedDocuments"/></method></resource>
+                    <service name="org.moqui.search.SearchServices.index#DataFeedDocuments"/></method></resource>
                 <resource name="documents"><method type="get">
                     <service name="org.moqui.impl.EntityServices.get#DataFeedDocuments"/></method></resource>
             </id>
@@ -39,11 +39,11 @@ along with this software (see the LICENSE.md file). If not, see
         <resource name="indexes">
             <id name="indexName">
                 <resource name="mappings"><method type="post">
-                    <service name="org.moqui.elasticsearch.SearchServices.put#DataDocumentMappings"/></method></resource>
+                    <service name="org.moqui.search.SearchServices.put#DataDocumentMappings"/></method></resource>
                 <resource name="search"><method type="post">
-                    <service name="org.moqui.elasticsearch.SearchServices.search#DataDocuments"/></method></resource>
+                    <service name="org.moqui.search.SearchServices.search#DataDocuments"/></method></resource>
                 <resource name="searchCount"><method type="post">
-                    <service name="org.moqui.elasticsearch.SearchServices.search#CountBySource"/></method></resource>
+                    <service name="org.moqui.search.SearchServices.search#CountBySource"/></method></resource>
             </id>
         </resource>
     </resource>

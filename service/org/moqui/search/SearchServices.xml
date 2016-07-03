@@ -38,7 +38,7 @@ along with this software (see the LICENSE.md file). If not, see
 
                 ExecutionContext ec = context.ec
                 Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
-                Logger logger = LoggerFactory.getLogger("org.moqui.elasticsearch.SearchServices.indexDataDocuments")
+                Logger logger = LoggerFactory.getLogger("org.moqui.search.SearchServices.indexDataDocuments")
 
                 // Make sure all indices exist
                 Set indexNames = new HashSet()
@@ -113,7 +113,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="documentList" from="ec.entity.getEntityDataFeed().getFeedDocuments(dataFeedId, fromUpdateStamp, thruUpdatedStamp)"/>
             <set field="feedStamp" from="thruUpdateStamp ?: ec.user.nowTimestamp"/>
             <if condition="documentList">
-                <service-call name="org.moqui.elasticsearch.SearchServices.index#DataDocuments" in-map="context"/>
+                <service-call name="org.moqui.search.SearchServices.index#DataDocuments" in-map="context"/>
             </if>
             <set field="documentsIndexed" from="documentList?.size() ?: 0"/>
             <message>Indexed ${documentsIndexed} documents</message>
@@ -139,7 +139,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <script>documentList.addAll(ec.entity.getDataDocuments(dataDocumentId,
                     ec.entity.conditionFactory.makeCondition([wikiPageId:getWpiResult.wikiPageId]), null, null))</script>
             </iterate>
-            <script>ec.service.sync().name("org.moqui.elasticsearch.SearchServices.index#DataDocuments")
+            <script>ec.service.sync().name("org.moqui.search.SearchServices.index#DataDocuments")
                 .parameters([documentList:documentList]).call()</script>
 
             <message>Found and indexed ${allChildFileFlatList.size()} pages in Wiki Space [${wikiSpaceId}], created DB records for ${recordsCreated}.</message>

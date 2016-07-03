@@ -24,5 +24,5 @@ along with this software (see the LICENSE.md file). If not, see
             errorTitleTemplate="Error in Index Documents for DataFeed ${parameters.dataFeedId}"
             linkTemplate=""/>
     <moqui.service.job.ServiceJob jobName="IndexDataFeedDocuments" description="Index DataFeed Documents"
-            serviceName="org.moqui.elasticsearch.SearchServices.index#DataFeedDocuments" topic="IndexDataFeedDocuments"/>
+            serviceName="org.moqui.search.SearchServices.index#DataFeedDocuments" topic="IndexDataFeedDocuments"/>
 </entity-facade-xml>
