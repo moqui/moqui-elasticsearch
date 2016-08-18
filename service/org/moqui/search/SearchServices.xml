@@ -14,13 +14,14 @@ along with this software (see the LICENSE.md file). If not, see
 -->
 <services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.0.xsd">
 
-    <service verb="index" noun="DataDocuments" authenticate="false">
+    <service verb="index" noun="DataDocuments" authenticate="false" transaction-timeout="3600">
         <description>Indexes documents passed using ElasticSearch. The DataDocument must have an indexName.</description>
         <implements service="org.moqui.EntityServices.receive#DataFeed"/>
         <in-parameters>
             <parameter name="dataFeedId" required="false"/>
             <parameter name="feedStamp" type="Timestamp" required="false"/>
             <parameter name="getOriginalDocuments" type="Boolean" default="false"/>
+            <parameter name="verifyIndexes" type="Boolean" default="true"/>
         </in-parameters>
         <out-parameters>
             <parameter name="documentVersionList" type="List" required="true"/>
@@ -41,9 +42,11 @@ along with this software (see the LICENSE.md file). If not, see
                 Logger logger = LoggerFactory.getLogger("org.moqui.search.SearchServices.indexDataDocuments")
 
                 // Make sure all indices exist
-                Set indexNames = new HashSet()
-                for (Map document in documentList) indexNames.add(document._index)
-                for (String indexName in indexNames) ElasticSearchUtil.checkCreateIndex(indexName, ec)
+                if (verifyIndexes) {
+                    Set indexNames = new HashSet()
+                    for (Map document in documentList) indexNames.add(document._index)
+                    for (String indexName in indexNames) ElasticSearchUtil.checkCreateIndex(indexName, ec)
+                }
 
                 documentVersionList = []
                 originalDocumentList = getOriginalDocuments ? [] : null
@@ -99,7 +102,7 @@ along with this software (see the LICENSE.md file). If not, see
         <actions><script>org.moqui.elasticsearch.ElasticSearchUtil.putIndexMappings(indexName, ec)</script></actions>
     </service>
 
-    <service verb="index" noun="DataFeedDocuments" authenticate="false" transaction-timeout="600">
+    <service verb="index" noun="DataFeedDocuments" authenticate="false" transaction-timeout="3600">
         <description>Index all documents associated with the feed within the date range. Recommend calling through the IndexDataFeedDocuments service job.</description>
         <in-parameters>
             <parameter name="dataFeedId" required="true"/>
@@ -110,13 +113,56 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="documentsIndexed" type="Integer"/>
         </out-parameters>
         <actions>
+            <entity-find entity-name="moqui.entity.feed.DataFeedDocument" list="dfDocList" cache="true">
+                <econdition field-name="dataFeedId"/></entity-find>
+            <set field="documentsIndexed" from="0"/>
+            <script><![CDATA[
+                import org.moqui.context.ExecutionContext
+                import org.moqui.elasticsearch.ElasticSearchUtil
+                import java.util.concurrent.Future
+
+                ExecutionContext ec = context.ec
+                for (Map dfDoc in dfDocList) {
+                    ArrayList<Map> documentList = ec.entity.entityDataDocument.getDataDocuments(dfDoc.dataDocumentId, null, fromUpdateStamp, thruUpdatedStamp)
+                    if (!documentList) continue
+                    // make sure the index exists
+                    ElasticSearchUtil.checkCreateIndex((String) documentList.get(0).get("_index"), ec)
+
+                    // index the documents
+                    int docListSize = documentList.size()
+                    if (docListSize > 10000) {
+                        int numThreads = Runtime.getRuntime().availableProcessors()
+                        ec.logger.info("Indexing ${docListSize} type ${dfDoc.dataDocumentId} documents for feed ${dataFeedId} with ${numThreads} threads")
+                        int subListSize = docListSize / numThreads
+                        ArrayList<Future> futureList = new ArrayList<>(numThreads)
+                        for (int i = 0; i < numThreads - 1; i++) {
+                            futureList.add(ec.service.async().name("org.moqui.search.SearchServices.index#DataDocuments")
+                                    .parameter("documentList", documentList.subList(i * subListSize, (i + 1) * subListSize))
+                                    .parameter("verifyIndexes", false)
+                                    .callFuture())
+                        }
+                        futureList.add(ec.service.async().name("org.moqui.search.SearchServices.index#DataDocuments")
+                                .parameter("documentList", documentList.subList((numThreads-1) * subListSize, docListSize))
+                                .parameter("verifyIndexes", false)
+                                .callFuture())
+                        for (Future future in futureList) future.get()
+                    } else {
+                        ec.logger.info("Indexing ${docListSize} type ${dfDoc.dataDocumentId} documents for feed ${dataFeedId}")
+                        ec.service.sync().name("org.moqui.search.SearchServices.index#DataDocuments").parameter("documentList", documentList).call()
+                    }
+                    documentsIndexed += documentList.size()
+                }
+            ]]></script>
+
+            <!-- old simple approach, just one call for all documents in feed:
             <set field="documentList" from="ec.entity.getEntityDataFeed().getFeedDocuments(dataFeedId, fromUpdateStamp, thruUpdatedStamp)"/>
             <set field="feedStamp" from="thruUpdateStamp ?: ec.user.nowTimestamp"/>
             <if condition="documentList">
                 <service-call name="org.moqui.search.SearchServices.index#DataDocuments" in-map="context"/>
             </if>
             <set field="documentsIndexed" from="documentList?.size() ?: 0"/>
-            <message>Indexed ${documentsIndexed} documents</message>
+            -->
+            <message>Indexed ${documentsIndexed} documents for feed ${dataFeedId}</message>
         </actions>
     </service>
 
@@ -139,8 +185,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <script>documentList.addAll(ec.entity.getDataDocuments(dataDocumentId,
                     ec.entity.conditionFactory.makeCondition([wikiPageId:getWpiResult.wikiPageId]), null, null))</script>
             </iterate>
-            <script>ec.service.sync().name("org.moqui.search.SearchServices.index#DataDocuments")
-                .parameters([documentList:documentList]).call()</script>
+            <script>ec.service.sync().name("org.moqui.search.SearchServices.index#DataDocuments").parameter("documentList", documentList).call()</script>
 
             <message>Found and indexed ${allChildFileFlatList.size()} pages in Wiki Space [${wikiSpaceId}], created DB records for ${recordsCreated}.</message>
         </actions>
