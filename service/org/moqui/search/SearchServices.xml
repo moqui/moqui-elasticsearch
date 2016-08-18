@@ -28,7 +28,11 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="originalDocumentList" type="List" required="false"/>
         </out-parameters>
         <actions>
-            <script>
+            <script><![CDATA[
+
+                import org.elasticsearch.action.bulk.BulkItemResponse
+                import org.elasticsearch.action.bulk.BulkRequestBuilder
+                import org.elasticsearch.action.bulk.BulkResponse
                 import org.elasticsearch.client.Client
                 import org.elasticsearch.action.get.GetResponse
                 import org.elasticsearch.action.index.IndexResponse
@@ -36,6 +40,8 @@ along with this software (see the LICENSE.md file). If not, see
                 import org.slf4j.LoggerFactory
                 import org.moqui.context.ExecutionContext
                 import org.moqui.elasticsearch.ElasticSearchUtil
+
+                int docsPerBulk = 1000
 
                 ExecutionContext ec = context.ec
                 Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
@@ -50,6 +56,8 @@ along with this software (see the LICENSE.md file). If not, see
 
                 documentVersionList = []
                 originalDocumentList = getOriginalDocuments ? [] : null
+                BulkRequestBuilder bulkBuilder = elasticSearchClient.prepareBulk()
+                int curBulkDocs = 0
                 for (Map document in documentList) {
                     // logger.warn("====== Indexing document: ${document}")
 
@@ -82,19 +90,35 @@ along with this software (see the LICENSE.md file). If not, see
                             originalDocumentList.add([:])
                         }
                     }
-                    // Groovy DSL version
-                    // IndexResponse response = elasticSearchClient.index { index document._index; type document._type;
-                    //     id document._id; source document; }.actionGet()
-                    // Java API version
-                    IndexResponse response = elasticSearchClient.prepareIndex(_index, _type, _id)
-                            .setIndex(_index).setType(_type).setId(_id).setTimestamp(_timestamp)
-                            .setSource(document).execute().actionGet()
+                    bulkBuilder.add(elasticSearchClient.prepareIndex(_index, _type, _id)
+                            .setIndex(_index).setType(_type).setId(_id).setTimestamp(_timestamp).setSource(document))
+                    curBulkDocs++
 
-                    documentVersionList.add(response.getVersion())
-                    if (logger.isTraceEnabled()) logger.trace("Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}]")
+                    if (curBulkDocs >= docsPerBulk) {
+                        BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                        if (bulkResponse.hasFailures()) {
+                            ec.message.addError(bulkResponse.buildFailureMessage())
+                            break
+                        }
+
+                        BulkItemResponse[] itemResponses = bulkResponse.getItems()
+                        int itemResponsesSize = itemResponses.length
+                        for (int i = 0; i < itemResponsesSize; i++) documentVersionList.add(itemResponses[i].getVersion())
+
+                        // create a new bulk builder for the next set
+                        curBulkDocs = 0
+                        bulkBuilder = elasticSearchClient.prepareBulk()
+                    }
+
+                    // Individual index operation approach
+                    // IndexResponse response = elasticSearchClient.prepareIndex(_index, _type, _id)
+                    //         .setIndex(_index).setType(_type).setId(_id).setTimestamp(_timestamp)
+                    //         .setSource(document).execute().actionGet()
+                    // documentVersionList.add(response.getVersion())
+                    // if (logger.isTraceEnabled()) logger.trace("Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}]")
                     // logger.warn("====== Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}] created? ${response.isCreated()}}")
                 }
-            </script>
+            ]]></script>
         </actions>
     </service>
     <service verb="put" noun="DataDocumentMappings">
@@ -113,6 +137,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="documentsIndexed" type="Integer"/>
         </out-parameters>
         <actions>
+            <set field="startTime" from="System.currentTimeMillis()"/>
             <entity-find entity-name="moqui.entity.feed.DataFeedDocument" list="dfDocList" cache="true">
                 <econdition field-name="dataFeedId"/></entity-find>
             <set field="documentsIndexed" from="0"/>
@@ -130,8 +155,9 @@ along with this software (see the LICENSE.md file). If not, see
 
                     // index the documents
                     int docListSize = documentList.size()
-                    if (docListSize > 10000) {
-                        int numThreads = Runtime.getRuntime().availableProcessors()
+                    // NOTE: doing multiple threads doesn't make a big difference, the bulk indexing makes a huge difference, so effectively disabling this in the if expression
+                    if (false) {
+                        int numThreads = Runtime.getRuntime().availableProcessors() / 2
                         ec.logger.info("Indexing ${docListSize} type ${dfDoc.dataDocumentId} documents for feed ${dataFeedId} with ${numThreads} threads")
                         int subListSize = docListSize / numThreads
                         ArrayList<Future> futureList = new ArrayList<>(numThreads)
@@ -162,7 +188,8 @@ along with this software (see the LICENSE.md file). If not, see
             </if>
             <set field="documentsIndexed" from="documentList?.size() ?: 0"/>
             -->
-            <message>Indexed ${documentsIndexed} documents for feed ${dataFeedId}</message>
+            <log level="info" message="Indexed ${documentsIndexed} documents for feed ${dataFeedId} in ${System.currentTimeMillis() - startTime}ms"/>
+            <message>Indexed ${documentsIndexed} documents for feed ${dataFeedId} in ${System.currentTimeMillis() - startTime}ms</message>
         </actions>
     </service>
 
