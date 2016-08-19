@@ -118,6 +118,14 @@ along with this software (see the LICENSE.md file). If not, see
                     // if (logger.isTraceEnabled()) logger.trace("Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}]")
                     // logger.warn("====== Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}] created? ${response.isCreated()}}")
                 }
+                if (curBulkDocs > 0) {
+                    BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                    if (bulkResponse.hasFailures()) ec.message.addError(bulkResponse.buildFailureMessage())
+
+                    BulkItemResponse[] itemResponses = bulkResponse.getItems()
+                    int itemResponsesSize = itemResponses.length
+                    for (int i = 0; i < itemResponsesSize; i++) documentVersionList.add(itemResponses[i].getVersion())
+                }
             ]]></script>
         </actions>
     </service>
