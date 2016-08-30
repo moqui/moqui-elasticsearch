@@ -56,16 +56,22 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         String initialClassPath = System.getProperty("java.class.path")
         StringBuilder newClassPathSb = new StringBuilder()
         String pathSeparator = System.getProperty("path.separator")
+        Set<String> cpEntrySet = new HashSet<>()
         if (initialClassPath) for (String cpEntry in initialClassPath.split(pathSeparator)) {
             if (!cpEntry) {
                 logger.warn("Found empty classpath entry, removing as ElasticSearch jar hell will blow up")
                 continue
             }
+            if (cpEntrySet.contains(cpEntry)) {
+                logger.warn("Found duplicate classpath entry ${cpEntry}, removing as ElasticSearch jar hell will blow up")
+                continue
+            }
+            cpEntrySet.add(cpEntry)
             if (newClassPathSb.length() > 0) newClassPathSb.append(pathSeparator)
             newClassPathSb.append(cpEntry)
         }
         System.setProperty("java.class.path", newClassPathSb.toString())
-        logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
+        // logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
 
         // build the ES node
         elasticSearchNode = NodeBuilder.nodeBuilder().node()
