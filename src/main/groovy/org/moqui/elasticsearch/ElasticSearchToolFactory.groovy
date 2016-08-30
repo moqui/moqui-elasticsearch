@@ -51,6 +51,23 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         if (!System.getProperty("es.path.data")) System.setProperty("es.path.data", ecf.runtimePath + "/elasticsearch/data")
         if (!System.getProperty("es.path.logs")) System.setProperty("es.path.logs", ecf.runtimePath + "/log")
         logger.info("Starting ElasticSearch, home at ${System.getProperty("es.path.home")}, data at ${System.getProperty("es.path.data")}, logs at ${System.getProperty("es.path.logs")}")
+
+        // some code to cleanup the classpath, avoid jar hell IllegalStateException
+        String initialClassPath = System.getProperty("java.class.path")
+        StringBuilder newClassPathSb = new StringBuilder()
+        String pathSeparator = System.getProperty("path.separator")
+        if (initialClassPath) for (String cpEntry in initialClassPath.split(pathSeparator)) {
+            if (!cpEntry) {
+                logger.warn("Found empty classpath entry, removing as ElasticSearch jar hell will blow up")
+                continue
+            }
+            if (newClassPathSb.length() > 0) newClassPathSb.append(pathSeparator)
+            newClassPathSb.append(cpEntry)
+        }
+        System.setProperty("java.class.path", newClassPathSb.toString())
+        logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
+
+        // build the ES node
         elasticSearchNode = NodeBuilder.nodeBuilder().node()
         elasticSearchClient = elasticSearchNode.client()
     }
