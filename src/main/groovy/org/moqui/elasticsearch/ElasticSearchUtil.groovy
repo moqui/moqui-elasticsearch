@@ -118,7 +118,7 @@ class ElasticSearchUtil {
             while (fieldPathElementIter.hasNext()) {
                 String fieldPathElement = fieldPathElementIter.next()
                 if (fieldPathElementIter.hasNext()) {
-                    EntityDefinition.RelationshipInfo relInfo = currentEd.getRelationshipInfo(fieldPathElement)
+                    EntityJavaUtil.RelationshipInfo relInfo = currentEd.getRelationshipInfo(fieldPathElement)
                     if (relInfo == null) throw new EntityException("Could not find relationship [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
                     currentEd = relInfo.relatedEd
                     if (currentEd == null) throw new EntityException("Could not find entity [${relInfo.relatedEntityName}] in DataDocument [${dataDocumentId}]")
