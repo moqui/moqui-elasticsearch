@@ -24,6 +24,7 @@ import org.moqui.entity.EntityValue
 import org.moqui.impl.context.ExecutionContextImpl
 import org.moqui.impl.entity.EntityDefinition
 import org.moqui.impl.entity.EntityJavaUtil
+import org.moqui.impl.entity.FieldInfo
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -99,7 +100,7 @@ class ElasticSearchUtil {
             if (!fieldPath.contains(':')) {
                 // is a field on the primary entity, put it there
                 String fieldName = dataDocumentField.fieldNameAlias ?: dataDocumentField.fieldPath
-                EntityJavaUtil.FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
+                FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
                 if (fieldInfo == null) throw new EntityException("Could not find field [${dataDocumentField.fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
 
                 String fieldType = fieldInfo.type
@@ -139,7 +140,7 @@ class ElasticSearchUtil {
                     }
                 } else {
                     String fieldName = (String) dataDocumentField.fieldNameAlias ?: fieldPathElement
-                    EntityJavaUtil.FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
+                    FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
                     if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
                     String fieldType = fieldInfo.type
                     String mappingType = esTypeMap.get(fieldType) ?: 'string'
@@ -154,7 +155,7 @@ class ElasticSearchUtil {
 
         // now get all the PK fields not aliased explicitly
         for (String remainingPkName in remainingPkFields) {
-            EntityJavaUtil.FieldInfo fieldInfo = primaryEd.getFieldInfo(remainingPkName)
+            FieldInfo fieldInfo = primaryEd.getFieldInfo(remainingPkName)
             String fieldType = fieldInfo.type
             String mappingType = esTypeMap.get(fieldType) ?: 'string'
             Map propertyMap = [type:mappingType]
