@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory
 class ElasticSearchUtil {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticSearchUtil.class)
 
+    // NOTE: called in service scripts
     static void checkCreateIndex(String indexName, ExecutionContextImpl eci) {
         String baseIndexName = indexName.contains("__") ? indexName.substring(indexName.indexOf("__") + 2) : indexName
 
@@ -44,7 +45,7 @@ class ElasticSearchUtil {
 
         CreateIndexRequestBuilder cirb = client.admin().indices().prepareCreate(indexName)
 
-        EntityList ddList = eci.entity.find("moqui.entity.document.DataDocument").condition("indexName", baseIndexName).list()
+        EntityList ddList = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", baseIndexName).list()
         for (EntityValue dd in ddList) {
             Map docMapping = makeElasticSearchMapping((String) dd.dataDocumentId, eci)
             cirb.addMapping((String) dd.dataDocumentId, docMapping)
@@ -54,6 +55,7 @@ class ElasticSearchUtil {
         cirb.execute().actionGet()
     }
 
+    // NOTE: called in service scripts
     static void putIndexMappings(String indexName, ExecutionContextImpl eci) {
         String baseIndexName = indexName.contains("__") ? indexName.substring(indexName.indexOf("__") + 2) : indexName
 
@@ -77,7 +79,7 @@ class ElasticSearchUtil {
             'text-medium':'string', 'text-long':'string', 'text-very-long':'string', 'binary-very-long':'binary']
 
     static Map makeElasticSearchMapping(String dataDocumentId, ExecutionContextImpl eci) {
-        EntityValue dataDocument = eci.entity.find("moqui.entity.document.DataDocument")
+        EntityValue dataDocument = eci.entityFacade.find("moqui.entity.document.DataDocument")
                 .condition("dataDocumentId", dataDocumentId).useCache(true).one()
         if (dataDocument == null) throw new EntityException("No DataDocument found with ID [${dataDocumentId}]")
         EntityList dataDocumentFieldList = dataDocument.findRelated("moqui.entity.document.DataDocumentField", null, null, true, false)
@@ -89,7 +91,7 @@ class ElasticSearchUtil {
 
         String primaryEntityName = dataDocument.primaryEntityName
         // String primaryEntityAlias = relationshipAliasMap.get(primaryEntityName) ?: primaryEntityName
-        EntityDefinition primaryEd = eci.ecfi.getEntityFacade(eci.tenantId).getEntityDefinition(primaryEntityName)
+        EntityDefinition primaryEd = eci.entityFacade.getEntityDefinition(primaryEntityName)
 
         Map<String, Object> rootProperties = [_entity:[type:'string', index:'not_analyzed']] as Map<String, Object>
         Map<String, Object> mappingMap = [properties:rootProperties] as Map<String, Object>
