@@ -285,8 +285,6 @@ along with this software (see the LICENSE.md file). If not, see
 
                 documentList = []
 
-                if (!indexName.contains("__")) indexName = "${ec.tenantId}__${indexName}".toLowerCase()
-
                 // make sure index exists
                 ElasticSearchUtil.checkCreateIndex(indexName, ec)
 
@@ -382,8 +380,6 @@ along with this software (see the LICENSE.md file). If not, see
 
                 ExecutionContext ec = context.ec
                 Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
-
-                if (!indexName.contains('__')) indexName = "${ec.tenantId}__${indexName}".toLowerCase()
 
                 // make sure index exists
                 ElasticSearchUtil.checkCreateIndex(indexName, ec)
