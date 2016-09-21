@@ -132,7 +132,8 @@ class ElasticSearchUtil {
                         Map<String, Object> subObject = (Map<String, Object>) currentProperties.get(objectName)
                         Map<String, Object> subProperties
                         if (subObject == null) {
-                            subProperties = [:] as Map<String, Object>
+                            subProperties = new HashMap<>()
+                            // NOTE: not doing type:'nested', ES docs say arrays should have it but they go into separate documents and term/facet searches fail!
                             subObject = [properties:subProperties] as Map<String, Object>
                             currentProperties.put(objectName, subObject)
                         } else {
@@ -145,8 +146,8 @@ class ElasticSearchUtil {
                     FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
                     if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
                     String fieldType = fieldInfo.type
-                    String mappingType = esTypeMap.get(fieldType) ?: 'string'
-                    Map propertyMap = [type:mappingType] as Map<String, Object>
+                    Map<String, Object> propertyMap = new HashMap<>()
+                    propertyMap.type = esTypeMap.get(fieldType) ?: 'string'
                     if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
                     currentProperties.put(fieldName, propertyMap)
 
