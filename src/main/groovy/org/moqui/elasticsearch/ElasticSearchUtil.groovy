@@ -73,10 +73,10 @@ class ElasticSearchUtil {
         }
     }
 
-    static final Map<String, String> esTypeMap = [id:'string', 'id-long':'string', date:'date', time:'string',
+    static final Map<String, String> esTypeMap = [id:'keyword', 'id-long':'keyword', date:'date', time:'text',
             'date-time':'date', 'number-integer':'long', 'number-decimal':'double', 'number-float':'double',
-            'currency-amount':'double', 'currency-precise':'double', 'text-indicator':'string', 'text-short':'string',
-            'text-medium':'string', 'text-long':'string', 'text-very-long':'string', 'binary-very-long':'binary']
+            'currency-amount':'double', 'currency-precise':'double', 'text-indicator':'keyword', 'text-short':'text',
+            'text-medium':'text', 'text-long':'text', 'text-very-long':'text', 'binary-very-long':'binary']
 
     static Map makeElasticSearchMapping(String dataDocumentId, ExecutionContextImpl eci) {
         EntityValue dataDocument = eci.entityFacade.find("moqui.entity.document.DataDocument")
@@ -93,7 +93,7 @@ class ElasticSearchUtil {
         // String primaryEntityAlias = relationshipAliasMap.get(primaryEntityName) ?: primaryEntityName
         EntityDefinition primaryEd = eci.entityFacade.getEntityDefinition(primaryEntityName)
 
-        Map<String, Object> rootProperties = [_entity:[type:'string', index:'not_analyzed']] as Map<String, Object>
+        Map<String, Object> rootProperties = [_entity:[type:'keyword']] as Map<String, Object>
         Map<String, Object> mappingMap = [properties:rootProperties] as Map<String, Object>
 
         List<String> remainingPkFields = new ArrayList(primaryEd.getPkFieldNames())
@@ -104,12 +104,7 @@ class ElasticSearchUtil {
                 String fieldName = dataDocumentField.fieldNameAlias ?: dataDocumentField.fieldPath
                 FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
                 if (fieldInfo == null) throw new EntityException("Could not find field [${dataDocumentField.fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-
-                String fieldType = fieldInfo.type
-                String mappingType = esTypeMap.get(fieldType) ?: 'string'
-                Map propertyMap = [type:mappingType]
-                if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
-                rootProperties.put(fieldName, propertyMap)
+                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type))
 
                 if (remainingPkFields.contains(dataDocumentField.fieldPath)) remainingPkFields.remove((String) dataDocumentField.fieldPath)
                 continue
@@ -145,11 +140,7 @@ class ElasticSearchUtil {
                     String fieldName = (String) dataDocumentField.fieldNameAlias ?: fieldPathElement
                     FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
                     if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                    String fieldType = fieldInfo.type
-                    Map<String, Object> propertyMap = new HashMap<>()
-                    propertyMap.type = esTypeMap.get(fieldType) ?: 'string'
-                    if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
-                    currentProperties.put(fieldName, propertyMap)
+                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type))
 
                     // logger.info("DataDocument ${dataDocumentId} field ${fieldName}, propertyMap: ${propertyMap}")
                 }
@@ -160,14 +151,21 @@ class ElasticSearchUtil {
         for (String remainingPkName in remainingPkFields) {
             FieldInfo fieldInfo = primaryEd.getFieldInfo(remainingPkName)
             String fieldType = fieldInfo.type
-            String mappingType = esTypeMap.get(fieldType) ?: 'string'
+            String mappingType = esTypeMap.get(fieldType) ?: 'keyword'
             Map propertyMap = [type:mappingType]
-            if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
+            // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
             rootProperties.put(remainingPkName, propertyMap)
         }
 
         if (logger.isTraceEnabled()) logger.trace("Generated ElasticSearch mapping for ${dataDocumentId}: \n${JsonOutput.prettyPrint(JsonOutput.toJson(mappingMap))}")
 
         return mappingMap
+    }
+    static Map makePropertyMap(String fieldType) {
+        String mappingType = esTypeMap.get(fieldType) ?: 'text'
+        Map propertyMap = [type:mappingType]
+        if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
+        // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
+        return propertyMap
     }
 }

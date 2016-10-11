@@ -15,13 +15,14 @@ package org.moqui.elasticsearch
 
 import groovy.transform.CompileStatic
 import org.elasticsearch.client.Client
-import org.elasticsearch.node.NodeBuilder
+import org.elasticsearch.common.settings.Settings
 import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.ToolFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /** ElasticSearch Client is used for indexing and searching documents */
+/** NOTE: embedded ElasticSearch may soon go away, see: https://www.elastic.co/blog/elasticsearch-the-server */
 @CompileStatic
 class ElasticSearchToolFactory implements ToolFactory<Client> {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticSearchToolFactory.class)
@@ -46,11 +47,10 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         // set the ElasticSearch home (for config, modules, plugins, scripts, etc), data, and logs directories
         // see https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-dir-layout.html
         // NOTE: could use getPath() instead of toExternalForm().substring(5) for file specific URLs, will work on Windows?
-        String defaultHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().toExternalForm().substring(5)
-        if (!System.getProperty("es.path.home")) System.setProperty("es.path.home", defaultHome)
-        if (!System.getProperty("es.path.data")) System.setProperty("es.path.data", ecf.runtimePath + "/elasticsearch/data")
-        if (!System.getProperty("es.path.logs")) System.setProperty("es.path.logs", ecf.runtimePath + "/log")
-        logger.info("Starting ElasticSearch, home at ${System.getProperty("es.path.home")}, data at ${System.getProperty("es.path.data")}, logs at ${System.getProperty("es.path.logs")}")
+        String pathHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().toExternalForm().substring(5)
+        String pathData = ecf.runtimePath + "/elasticsearch/data"
+        String pathLogs = ecf.runtimePath + "/log"
+        logger.info("Starting ElasticSearch, home at ${pathHome}, data at ${pathData}, logs at ${pathLogs}")
 
         // some code to cleanup the classpath, avoid jar hell IllegalStateException
         String initialClassPath = System.getProperty("java.class.path")
@@ -74,7 +74,13 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         // logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
 
         // build the ES node
-        elasticSearchNode = NodeBuilder.nodeBuilder().node()
+        Settings.Builder settings = Settings.builder()
+        settings.put("path.home", pathHome)
+        settings.put("path.data", pathData)
+        settings.put("path.logs", pathLogs)
+
+        elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
+        elasticSearchNode.start()
         elasticSearchClient = elasticSearchNode.client()
     }
     @Override

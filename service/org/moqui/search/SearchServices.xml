@@ -289,9 +289,10 @@ along with this software (see the LICENSE.md file). If not, see
                 ElasticSearchUtil.checkCreateIndex(indexName, ec)
 
                 // get the search hits
-                SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setTypes(documentType)
-                        .setQuery(QueryBuilders.queryStringQuery(queryString)).setFrom(fromOffset).setSize(sizeLimit)
+                SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
+                        .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setFrom(fromOffset).setSize(sizeLimit)
                         .setFetchSource(true)
+                if (documentType) srb.setTypes((String) documentType)
                 for (String orderByField in orderByFields) {
                     boolean ascending = true
                     if (orderByField.charAt(0) == '-') {
@@ -331,10 +332,11 @@ along with this software (see the LICENSE.md file). If not, see
                  */
 
                 // get the total search count
-                // TODO: replace deprecated (in 2.1.0) prepareCount(), release notes say: "Deprecate the count api in favour of search with size 0"
-                documentListCount = elasticSearchClient.prepareCount(indexName).setTypes(documentType)
-                        .setQuery(QueryBuilders.queryStringQuery(queryString)).execute().actionGet().getCount()
-                // this doesn't work: documentListCount = srb.execute().actionGet().getCount()
+                // replace deprecated (in 2.1.0) prepareCount(), release notes say: "Deprecate the count api in favour of search with size 0"
+                SearchRequestBuilder countSrb = elasticSearchClient.prepareSearch().setIndices(indexName)
+                        .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setSize(0)
+                if (documentType) countSrb.setTypes((String) documentType)
+                documentListCount = countSrb.execute().actionGet().getHits().totalHits()
 
                 // calculate the pagination values
                 documentListPageIndex = pageIndex
@@ -384,9 +386,8 @@ along with this software (see the LICENSE.md file). If not, see
                 // make sure index exists
                 ElasticSearchUtil.checkCreateIndex(indexName, ec)
 
-                // get the search hits
-                SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName)
-                        .setSearchType('count').setSize(maxResults)
+                // get the search hits (.setSearchType('count'))
+                SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName).setSize(maxResults)
                 if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
                 if (sourceJson) srb.setExtraSource((String) sourceJson)
                 if (sourceMap) srb.setExtraSource((Map) sourceMap)
