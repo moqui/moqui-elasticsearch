@@ -13,14 +13,23 @@
  */
 package org.moqui.elasticsearch
 
+import groovy.json.JsonBuilder
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
+import org.elasticsearch.action.search.SearchRequestBuilder
+import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.client.Client
+import org.elasticsearch.index.query.QueryBuilders
+import org.elasticsearch.search.aggregations.AggregationBuilder
+import org.elasticsearch.search.aggregations.AggregationBuilders
+import org.elasticsearch.search.aggregations.bucket.terms.Terms
+import org.elasticsearch.search.aggregations.metrics.sum.Sum
 import org.moqui.entity.EntityException
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
+import org.moqui.impl.StupidUtilities
 import org.moqui.impl.context.ExecutionContextImpl
 import org.moqui.impl.entity.EntityDefinition
 import org.moqui.impl.entity.EntityJavaUtil
@@ -167,5 +176,61 @@ class ElasticSearchUtil {
         if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
         return propertyMap
+    }
+
+    static SearchResponse aggregationSearch(String indexName, List<String> documentTypeList, Integer maxResults, Map queryMap,
+                                            AggregationBuilder aggBuilder, ExecutionContextImpl eci) {
+        JsonBuilder jb = new JsonBuilder()
+        jb.call((Map) queryMap)
+        String queryJson = jb.toString()
+        // logger.warn("aggregationSearch queryJson: ${JsonOutput.prettyPrint(queryJson)}")
+
+        Client elasticSearchClient = (Client) eci.getTool("ElasticSearch", Client.class)
+        // make sure index exists
+        checkCreateIndex(indexName, eci)
+
+        // get the search hits
+        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName).setSize(maxResults)
+        if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
+        srb.setQuery(QueryBuilders.wrapperQuery(queryJson))
+        srb.addAggregation(aggBuilder)
+        // logger.warn("aggregationSearch srb: ${srb.toString()}")
+
+        try {
+            SearchResponse searchResponse = srb.execute().actionGet()
+            // aggregations = searchResponse.getAggregations().getAsMap()
+            // responseString = searchResponse.toString()
+            return searchResponse
+        } catch (Exception e) {
+            logger.error("Error in search: ${e.toString()}\nQuery JSON:\n${JsonOutput.prettyPrint(queryJson)}")
+            throw e
+        }
+    }
+
+    static void simpleAggSearch(String indexName, List<String> documentTypeList, Integer maxResults,
+                                Map queryMap, String termAggField, Map<String, String> sumAggFieldByName,
+                                Map<String, Map<String, Object>> resultMap, ExecutionContextImpl eci) {
+        if (maxResults == null) maxResults = 1000
+        AggregationBuilder termAggBuilder = AggregationBuilders.terms("TermSimple").field(termAggField).size(maxResults)
+
+        int sumAggSize = sumAggFieldByName.size()
+        ArrayList<String> sumAggNames = new ArrayList<>(sumAggSize)
+        for (Map.Entry<String, String> entry in sumAggFieldByName.entrySet()) {
+            String sumAggName = entry.key
+            String field = entry.value
+            termAggBuilder.subAggregation(AggregationBuilders.sum(sumAggName).field(field))
+            sumAggNames.add(sumAggName)
+        }
+
+        SearchResponse searchResponse = aggregationSearch(indexName, documentTypeList, maxResults, queryMap, termAggBuilder, eci)
+
+        Terms termSimpleAgg = (Terms) searchResponse.getAggregations().get("TermSimple")
+        for (Terms.Bucket bucket in termSimpleAgg.getBuckets()) {
+            for (int i = 0; i < sumAggSize; i++) {
+                String sumAggName = (String) sumAggNames.get(i)
+                Sum sumAgg = (Sum) bucket.getAggregations().get(sumAggName)
+                StupidUtilities.addToMapInMap(bucket.getKey(), sumAggName, new BigDecimal(sumAgg.getValue()), resultMap)
+            }
+        }
     }
 }
