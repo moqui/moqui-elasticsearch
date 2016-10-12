@@ -109,13 +109,11 @@ discovery.type: local
 
 # ---------------------------------- Script ------------------------------------
 
-# script.inline: true
-# script.stored: true
-# script.file: true
+script.inline: true
+script.stored: true
+script.file: true
 
-# script.legacy.default_lang: groovy
-
-# not needed any more? script.groovy.sandbox.enabled: true
+script.engine.groovy.inline.aggs: on
 
 # script.engine.groovy.file.aggs: on
 # script.engine.groovy.file.ingest: on
@@ -123,7 +121,7 @@ discovery.type: local
 # script.engine.groovy.file.update: on
 # script.engine.groovy.stored.aggs: on
 # script.engine.groovy.stored.ingest: off
-# script.engine.groovy.stored.search: on
+# script.engine.groovy.stored.search: off
 # script.engine.groovy.stored.update: off
 # script.engine.groovy.inline.aggs: on
 # script.engine.groovy.inline.ingest: off
