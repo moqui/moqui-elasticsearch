@@ -310,7 +310,7 @@ along with this software (see the LICENSE.md file). If not, see
                 document._id = hit.getId()
                 // how to get timestamp? doesn't seem to be in API: document._timestamp = hit.get?
                 document._version = hit.getVersion()
-                documentList.add(flattenDocument ? StupidUtilities.flattenNestedMap(document) : document)
+                documentList.add(flattenDocument ? flattenNestedMap(document) : document)
             }
 
             // get the total search count
