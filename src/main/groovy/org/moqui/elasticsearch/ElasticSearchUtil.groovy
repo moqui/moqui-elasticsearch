@@ -29,11 +29,11 @@ import org.elasticsearch.search.aggregations.metrics.sum.Sum
 import org.moqui.entity.EntityException
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
-import org.moqui.impl.StupidUtilities
 import org.moqui.impl.context.ExecutionContextImpl
 import org.moqui.impl.entity.EntityDefinition
 import org.moqui.impl.entity.EntityJavaUtil
 import org.moqui.impl.entity.FieldInfo
+import org.moqui.util.CollectionUtilities
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -229,7 +229,7 @@ class ElasticSearchUtil {
             for (int i = 0; i < sumAggSize; i++) {
                 String sumAggName = (String) sumAggNames.get(i)
                 Sum sumAgg = (Sum) bucket.getAggregations().get(sumAggName)
-                StupidUtilities.addToMapInMap(bucket.getKey(), sumAggName, new BigDecimal(sumAgg.getValue()), resultMap)
+                CollectionUtilities.addToMapInMap(bucket.getKey(), sumAggName, new BigDecimal(sumAgg.getValue()), resultMap)
             }
         }
     }
