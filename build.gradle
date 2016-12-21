@@ -41,7 +41,7 @@ dependencies {
     compile project(':framework')
 
     // ElasticSearch Libraries, including Lucene
-    compile 'org.elasticsearch:elasticsearch:5.0.1' // Apache 2.0
+    compile 'org.elasticsearch:elasticsearch:5.1.1' // Apache 2.0
     // ElasticSearch uses jackson-dataformat-smile, -yaml, -cbor pulling in jackson-core, also used by OrientDB, but gets an older version
     compile 'com.fasterxml.jackson.core:jackson-databind:2.8.5'
     compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.8.5'
