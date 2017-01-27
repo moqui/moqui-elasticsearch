@@ -225,11 +225,9 @@ along with this software (see the LICENSE.md file). If not, see
 
     <service verb="search" noun="DataDocuments">
         <description>
-            The queryString format is the ElasticSearch supported one, based on the Lucene query strings which are
-            partly documented here:
+            The queryString format is the ElasticSearch supported one, based on the Lucene query strings which are documented here:
 
-            http://lucene.apache.org/core/4_9_1/queryparser/org/apache/lucene/queryparser/classic/package-summary.html
-            http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax
+            https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html
 
             Sort options are described here:
 
