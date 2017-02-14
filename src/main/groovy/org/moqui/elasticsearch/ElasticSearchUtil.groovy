@@ -55,6 +55,13 @@ class ElasticSearchUtil {
 
         CreateIndexRequestBuilder cirb = client.admin().indices().prepareCreate(indexName)
 
+        EntityValue ddis = eci.entityFacade.find("moqui.entity.document.DataDocumentIndexSetting").condition("indexName", baseIndexName).one()
+        if (ddis != null) {
+            JsonSlurper slurper = new JsonSlurper()
+            Map settings = slurper.parseText(ddis.settings as String) as Map
+            cirb.setSettings(settings)
+        }
+
         EntityList ddList = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", baseIndexName).list()
         for (EntityValue dd in ddList) {
             Map docMapping = makeElasticSearchMapping((String) dd.dataDocumentId, eci)
