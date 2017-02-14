@@ -15,6 +15,7 @@ package org.moqui.elasticsearch
 
 import groovy.json.JsonBuilder
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import groovy.transform.CompileStatic
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
@@ -87,6 +88,12 @@ class ElasticSearchUtil {
             'currency-amount':'double', 'currency-precise':'double', 'text-indicator':'keyword', 'text-short':'text',
             'text-medium':'text', 'text-long':'text', 'text-very-long':'text', 'binary-very-long':'binary']
 
+    // ignore 'properties'
+    static final List<String> esFieldMappings = ["analyzer", "normalizer", "boost", "coerce", "copy_to", "doc_values",
+            "dynamic", "enabled", "fielddata", "fielddata_frequency_filter", "format", "ignore_above", "ignore_malformed",
+            "include_in_all", "index", "index_options", "fields", "norms", "null_value", "position_increment_gap",
+            "search_analyzer", "similarity", "store", "term_vector"]
+
     static Map makeElasticSearchMapping(String dataDocumentId, ExecutionContextImpl eci) {
         EntityValue dataDocument = eci.entityFacade.find("moqui.entity.document.DataDocument")
                 .condition("dataDocumentId", dataDocumentId).useCache(true).one()
@@ -108,12 +115,15 @@ class ElasticSearchUtil {
         List<String> remainingPkFields = new ArrayList(primaryEd.getPkFieldNames())
         for (EntityValue dataDocumentField in dataDocumentFieldList) {
             String fieldPath = dataDocumentField.fieldPath
+
+            EntityList fieldMappingList = dataDocumentField.findRelated("moqui.entity.document.DataDocumentFieldMapping", null, null, true, false)
+
             if (!fieldPath.contains(':')) {
                 // is a field on the primary entity, put it there
                 String fieldName = dataDocumentField.fieldNameAlias ?: dataDocumentField.fieldPath
                 FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
                 if (fieldInfo == null) throw new EntityException("Could not find field [${dataDocumentField.fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type))
+                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type, fieldMappingList))
 
                 if (remainingPkFields.contains(dataDocumentField.fieldPath)) remainingPkFields.remove((String) dataDocumentField.fieldPath)
                 continue
@@ -149,7 +159,7 @@ class ElasticSearchUtil {
                     String fieldName = (String) dataDocumentField.fieldNameAlias ?: fieldPathElement
                     FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
                     if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type))
+                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type, fieldMappingList))
 
                     // logger.info("DataDocument ${dataDocumentId} field ${fieldName}, propertyMap: ${propertyMap}")
                 }
@@ -170,12 +180,59 @@ class ElasticSearchUtil {
 
         return mappingMap
     }
-    static Map makePropertyMap(String fieldType) {
+    static Map makePropertyMap(String fieldType, EntityList fieldMappingList) {
         String mappingType = esTypeMap.get(fieldType) ?: 'text'
         Map propertyMap = [type:mappingType]
         if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
+        appendFieldMappings(propertyMap, fieldMappingList)
         return propertyMap
+    }
+
+    static void appendFieldMappings(Map propertyMap, EntityList fieldMappingList) {
+        for (EntityValue fieldMapping in fieldMappingList) {
+            String mappingParameter = fieldMapping.mappingParameter
+            String mappingValue = fieldMapping.mappingValue
+            if (!esFieldMappings.contains(fieldMapping.mappingParameter)) {
+                logger.warn("DataDocumentField ${fieldMapping.dataDocumentFieldId} has a mapping ${mappingParameter} which is not supported")
+                continue
+            }
+            switch (mappingParameter) {
+                case "analyzer":
+                case "normalizer":
+                case "copy_to":
+                case "format":
+                case "index_options":
+                case "null_value":
+                case "search_analyzer":
+                case "similarity":
+                case "term_vector":
+                    propertyMap.put(mappingParameter, mappingValue)
+                    break
+                case "boost":
+                case "ignore_above":
+                case "position_increment_gap":
+                    propertyMap.put(mappingParameter, Integer.valueOf(mappingValue))
+                    break
+                case "coerce":
+                case "doc_values":
+                case "dynamic":
+                case "enabled":
+                case "fielddata":
+                case "ignore_malformed":
+                case "include_in_all":
+                case "index":
+                case "norms":
+                case "store":
+                    propertyMap.put(mappingParameter, Boolean.valueOf(mappingValue))
+                    break
+                case "fielddata_frequency_filter":
+                case "fields":
+                    JsonSlurper slurper = new JsonSlurper()
+                    propertyMap.put(mappingParameter, slurper.parseText(mappingValue))
+                    break
+            }
+        }
     }
 
     static SearchResponse aggregationSearch(String indexName, List<String> documentTypeList, Integer maxResults, Map queryMap,
