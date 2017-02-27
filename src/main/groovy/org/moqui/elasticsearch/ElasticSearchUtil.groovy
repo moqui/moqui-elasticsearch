@@ -113,7 +113,7 @@ class ElasticSearchUtil {
                 String fieldName = dataDocumentField.fieldNameAlias ?: dataDocumentField.fieldPath
                 FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
                 if (fieldInfo == null) throw new EntityException("Could not find field [${dataDocumentField.fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type))
+                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type, dataDocumentField.sortable as String))
 
                 if (remainingPkFields.contains(dataDocumentField.fieldPath)) remainingPkFields.remove((String) dataDocumentField.fieldPath)
                 continue
@@ -149,7 +149,7 @@ class ElasticSearchUtil {
                     String fieldName = (String) dataDocumentField.fieldNameAlias ?: fieldPathElement
                     FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
                     if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type))
+                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type, dataDocumentField.sortable as String))
 
                     // logger.info("DataDocument ${dataDocumentId} field ${fieldName}, propertyMap: ${propertyMap}")
                 }
@@ -170,9 +170,10 @@ class ElasticSearchUtil {
 
         return mappingMap
     }
-    static Map makePropertyMap(String fieldType) {
+    static Map makePropertyMap(String fieldType, String sortable) {
         String mappingType = esTypeMap.get(fieldType) ?: 'text'
-        Map propertyMap = [type:mappingType]
+        Map<String, Object> propertyMap = [type:mappingType as Object]
+        if ("Y".equals(sortable)) propertyMap.put("fields", [keyword: [type: "keyword"]])
         if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
         return propertyMap
