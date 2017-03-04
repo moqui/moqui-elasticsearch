@@ -173,7 +173,7 @@ class ElasticSearchUtil {
     static Map makePropertyMap(String fieldType, String sortable) {
         String mappingType = esTypeMap.get(fieldType) ?: 'text'
         Map<String, Object> propertyMap = [type:mappingType as Object]
-        if ("Y".equals(sortable)) propertyMap.put("fields", [keyword: [type: "keyword"]])
+        if ("Y".equals(sortable) && "text".equals(mappingType)) propertyMap.put("fields", [keyword: [type: "keyword"]])
         if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
         return propertyMap
