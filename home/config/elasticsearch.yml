@@ -113,7 +113,7 @@ script.inline: true
 script.stored: true
 script.file: true
 
-script.engine.groovy.inline.aggs: on
+script.engine.groovy.inline.aggs: true
 
 # script.engine.groovy.file.aggs: on
 # script.engine.groovy.file.ingest: on
