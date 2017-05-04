@@ -104,7 +104,7 @@ http.enabled: false
 
 cluster.name: MoquiElasticSearch
 transport.type: local
-# not in 5.1.1: discovery.type: local
+discovery.type: single-node
 # how to do this in 5.0.0? discovery.zen.ping.multicast.enabled: false
 
 # ---------------------------------- Script ------------------------------------
