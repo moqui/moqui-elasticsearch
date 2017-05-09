@@ -53,7 +53,7 @@ dependencies {
 
     // NOTE: the lang-groovy module must be in the runtime/elasticsearch/modules directory, not loaded from the classpath; update when updating elasticsearch version!
     // compile module('org.elasticsearch.module:lang-groovy:2.3.3') // Apache 2.0
-    compile module('org.codelibs.elasticsearch.module:lang-groovy:5.3.2')
+    compile module('org.codelibs.elasticsearch.module:lang-groovy:5.4.0')
 
     // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
     // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
