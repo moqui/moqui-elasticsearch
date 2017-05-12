@@ -137,8 +137,9 @@ class ElasticSearchUtil {
                         Map<String, Object> subProperties
                         if (subObject == null) {
                             subProperties = new HashMap<>()
-                            // NOTE: not doing type:'nested', ES docs say arrays should have it but they go into separate documents and term/facet searches fail!
-                            subObject = [properties:subProperties] as Map<String, Object>
+                            // using type:'nested' with include_in_root:true seems to support nested queries and currently works with query string full path field names too
+                            // NOTE: keep an eye on this and if it breaks for our primary use case which is query strings with full path field names then remove type:'nested' and include_in_root
+                            subObject = [properties:subProperties, type:'nested', include_in_root:true] as Map<String, Object>
                             currentProperties.put(objectName, subObject)
                         } else {
                             subProperties = (Map<String, Object>) subObject.get("properties")
