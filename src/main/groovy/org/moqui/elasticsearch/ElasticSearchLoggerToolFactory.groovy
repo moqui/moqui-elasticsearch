@@ -96,7 +96,15 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
                     thread_id:event.threadId, thread_priority:event.threadPriority, logger_name:event.loggerName,
                     message:event.message?.formattedMessage, source_host:localAddr.hostName] as Map<String, Object>
             ReadOnlyStringMap contextData = event.contextData
-            if (contextData != null && contextData.size() > 0) msgMap.put("mdc", contextData.toMap())
+            if (contextData != null && contextData.size() > 0) {
+                Map<String, String> mdcMap = new HashMap<>(contextData.toMap())
+                String userId = mdcMap.get("moqui_userId")
+                if (userId != null) { msgMap.put("user_id", userId); mdcMap.remove("moqui_userId") }
+                String visitorId = mdcMap.get("moqui_visitorId")
+                if (visitorId != null) { msgMap.put("visitor_id", visitorId); mdcMap.remove("moqui_visitorId") }
+                if (mdcMap.size() > 0) msgMap.put("mdc", mdcMap)
+                // System.out.println("Cur user ${userId} ${visitorId}")
+            }
             Throwable thrown = event.thrown
             if (thrown != null) msgMap.put("thrown", makeThrowableMap(thrown))
 
@@ -172,7 +180,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
                     } catch (Exception e) {
                         System.out.println("Error logging to ElasticSearch: ${e.toString()}")
                     }
-                    System.out.println("Indexed ${createListSize} ElasticSearch log messages in ${System.currentTimeMillis() - startTime}ms")
+                    // System.out.println("Indexed ${createListSize} ElasticSearch log messages in ${System.currentTimeMillis() - startTime}ms")
                     break
                 } catch (Throwable t) {
                     System.out.println("Error indexing ElasticSearch log messages, retrying (${retryCount}): ${t.toString()}")
@@ -186,7 +194,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             line:[type:'long']]]
     final static Map docMapping = [properties:
             ['@timestamp':[type:'date', format:'epoch_millis'], level:[type:'keyword'], thread_name:[type:'keyword'],
-                    thread_id:[type:'long'], thread_priority:[type:'long'],
+                    thread_id:[type:'long'], thread_priority:[type:'long'], user_id:[type:'keyword'], visitor_id:[type:'keyword'],
                     logger_name:[type:'text'], name:[type:'text'], message:[type:'text'], mdc:[type:'object'],
                     thrown:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
                             stackTrace:[type:'text'],
