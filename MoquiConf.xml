@@ -3,5 +3,6 @@
 <moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-2.1.xsd">
     <tools>
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchToolFactory" init-priority="15" disabled="false"/>
+        <tool-factory class="org.moqui.elasticsearch.ElasticSearchLoggerToolFactory" init-priority="16" disabled="false"/>
     </tools>
 </moqui-conf>

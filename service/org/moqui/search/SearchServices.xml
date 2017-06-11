@@ -64,8 +64,7 @@ along with this software (see the LICENSE.md file). If not, see
                 String _id = document._id
                 String _timestamp = document._timestamp
                 // As of ES 2.0 _index, _type, _id, and _timestamp shouldn't be in document to be indexed
-                document.remove('_index'); document.remove('_type'); document.remove('_id');
-                document.remove('_timestamp');
+                document.remove('_index'); document.remove('_type'); document.remove('_id'); document.remove('_timestamp')
 
                 if (getOriginalDocuments) {
                     // this may fail for a number of reasons, like index doesn't exist yet, so catch the exception
