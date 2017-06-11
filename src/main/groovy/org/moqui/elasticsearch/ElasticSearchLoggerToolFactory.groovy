@@ -68,7 +68,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             ecfi.registerLogEventSubscriber(subscriber)
 
             LogMessageQueueFlush lmqf = new LogMessageQueueFlush(this)
-            ecfi.scheduledExecutor.scheduleAtFixedRate(lmqf, 5, 5, TimeUnit.SECONDS)
+            ecfi.scheduledExecutor.scheduleAtFixedRate(lmqf, 2, 1, TimeUnit.SECONDS)
         }
 
     }
@@ -81,6 +81,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
 
     static class ElasticSearchSubscriber implements LogEventSubscriber {
         private final ElasticSearchLoggerToolFactory factory
+        private final InetAddress localAddr = InetAddress.getLocalHost()
 
         ElasticSearchSubscriber(ElasticSearchLoggerToolFactory factory) {
             this.factory = factory
@@ -91,11 +92,11 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             // NOTE: levels configurable in log4j2.xml but always exclude these
             if (Level.DEBUG.is(event.level) || Level.TRACE.is(event.level)) return
 
-            Map<String, Object> msgMap = [timeMillis:event.timeMillis, level:event.level.toString(),
-                    thread:event.threadName, threadId:event.threadId, threadPriority:event.threadPriority,
-                    loggerName:event.loggerName, message:event.message?.formattedMessage] as Map<String, Object>
+            Map<String, Object> msgMap = ['@timestamp':event.timeMillis, level:event.level.toString(), thread_name:event.threadName,
+                    thread_id:event.threadId, thread_priority:event.threadPriority, logger_name:event.loggerName,
+                    message:event.message?.formattedMessage, source_host:localAddr.hostName] as Map<String, Object>
             ReadOnlyStringMap contextData = event.contextData
-            if (contextData != null && contextData.size() > 0) msgMap.put("contextData", contextData.toMap())
+            if (contextData != null && contextData.size() > 0) msgMap.put("mdc", contextData.toMap())
             Throwable thrown = event.thrown
             if (thrown != null) msgMap.put("thrown", makeThrowableMap(thrown))
 
@@ -103,17 +104,17 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
         }
         static Map makeThrowableMap(Throwable thrown) {
             StackTraceElement[] stArray = thrown.stackTrace
-            List<Map> stList = []
+            List<String> stList = []
             for (int i = 0; i < stArray.length; i++) {
                 StackTraceElement ste = (StackTraceElement) stArray[i]
-                stList.add([class:ste.className, method:ste.methodName, file:ste.fileName, line:ste.lineNumber])
+                stList.add("${ste.className}.${ste.methodName}(${ste.fileName}:${ste.lineNumber})".toString())
             }
             Map<String, Object> thrownMap = [name:thrown.class.name, message:thrown.message,
-                    localizedMessage:thrown.localizedMessage] as Map<String, Object>
+                    localizedMessage:thrown.localizedMessage, stackTrace:stList] as Map<String, Object>
             Throwable cause = thrown.cause
             if (cause != null) thrownMap.put("cause", makeThrowableMap(cause))
             Throwable[] supArray = thrown.suppressed
-            if (supArray != null) {
+            if (supArray != null && supArray.length > 0) {
                 List<Map> supList = []
                 for (int i = 0; i < supArray.length; i++) {
                     Throwable sup = supArray[i]
@@ -181,16 +182,18 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
         }
     }
 
-    final static Map stackItemMapping = [type:'object', properties:[class:[type:'text'], method:[type:'text'], file:[type:'text'], line:[type:'long'],
-            exact:[type:'boolean'], location:[type:'text'], version:[type:'keyword']]]
+    final static Map stackItemMapping = [type:'object', properties:[class:[type:'text'], method:[type:'text'], file:[type:'text'],
+            line:[type:'long']]]
     final static Map docMapping = [properties:
-            [timeMillis:[type:'date', format:'epoch_millis'], level:[type:'keyword'],
-             thread:[type:'keyword'], threadId:[type:'long'], threadPriority:[type:'long'], endOfBatch:[type:'boolean'],
-             loggerFqcn:[type:'keyword'], loggerName:[type:'text'], name:[type:'text'], message:[type:'text'], context:[type:'object'],
-             thrown:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'], commonElementCount:[type:'long'],
-                    extendedStackTrace:stackItemMapping, suppressed:stackItemMapping,
-                    cause:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
-                            commonElementCount:[type:'long'], extendedStackTrace:stackItemMapping]]
+            ['@timestamp':[type:'date', format:'epoch_millis'], level:[type:'keyword'], thread_name:[type:'keyword'],
+                    thread_id:[type:'long'], thread_priority:[type:'long'],
+                    logger_name:[type:'text'], name:[type:'text'], message:[type:'text'], mdc:[type:'object'],
+                    thrown:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
+                            stackTrace:[type:'text'],
+                            suppressed:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
+                                    commonElementCount:[type:'long'], stackTrace:[type:'text']]],
+                            cause:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
+                                    commonElementCount:[type:'long'], stackTrace:[type:'text']]]
             ]]
     ]]
 }
