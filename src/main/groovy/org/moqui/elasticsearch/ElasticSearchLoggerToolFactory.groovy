@@ -16,13 +16,12 @@ package org.moqui.elasticsearch
 import groovy.transform.CompileStatic
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.core.LogEvent
-import org.apache.logging.log4j.core.layout.JsonLayout
+import org.apache.logging.log4j.util.ReadOnlyStringMap
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
 import org.elasticsearch.action.bulk.BulkRequestBuilder
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.client.Client
-import org.elasticsearch.common.xcontent.XContentType
 import org.elasticsearch.transport.TransportException
 import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.LogEventSubscriber
@@ -44,7 +43,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
 
     private Client elasticSearchClient = null
     private boolean disabled = false
-    final ConcurrentLinkedQueue<String> logMessageQueue = new ConcurrentLinkedQueue<String>()
+    final ConcurrentLinkedQueue<Map> logMessageQueue = new ConcurrentLinkedQueue<>()
 
     /** Default empty constructor */
     ElasticSearchLoggerToolFactory() { }
@@ -82,25 +81,52 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
 
     static class ElasticSearchSubscriber implements LogEventSubscriber {
         private final ElasticSearchLoggerToolFactory factory
-        private JsonLayout layout
 
         ElasticSearchSubscriber(ElasticSearchLoggerToolFactory factory) {
             this.factory = factory
-            JsonLayout.Builder builder = JsonLayout.newBuilder().setIncludeStacktrace(true)
-            builder.setCompact(true).setComplete(false)
-            layout = builder.build()
         }
         @Override
         void process(LogEvent event) {
             if (factory.disabled || factory.elasticSearchClient == null) return
             // NOTE: levels configurable in log4j2.xml but always exclude these
             if (Level.DEBUG.is(event.level) || Level.TRACE.is(event.level)) return
-            factory.logMessageQueue.add(layout.toSerializable(event))
+
+            Map<String, Object> msgMap = [timeMillis:event.timeMillis, level:event.level.toString(),
+                    thread:event.threadName, threadId:event.threadId, threadPriority:event.threadPriority,
+                    loggerName:event.loggerName, message:event.message?.formattedMessage] as Map<String, Object>
+            ReadOnlyStringMap contextData = event.contextData
+            if (contextData != null && contextData.size() > 0) msgMap.put("contextData", contextData.toMap())
+            Throwable thrown = event.thrown
+            if (thrown != null) msgMap.put("thrown", makeThrowableMap(thrown))
+
+            factory.logMessageQueue.add(msgMap)
+        }
+        static Map makeThrowableMap(Throwable thrown) {
+            StackTraceElement[] stArray = thrown.stackTrace
+            List<Map> stList = []
+            for (int i = 0; i < stArray.length; i++) {
+                StackTraceElement ste = (StackTraceElement) stArray[i]
+                stList.add([class:ste.className, method:ste.methodName, file:ste.fileName, line:ste.lineNumber])
+            }
+            Map<String, Object> thrownMap = [name:thrown.class.name, message:thrown.message,
+                    localizedMessage:thrown.localizedMessage] as Map<String, Object>
+            Throwable cause = thrown.cause
+            if (cause != null) thrownMap.put("cause", makeThrowableMap(cause))
+            Throwable[] supArray = thrown.suppressed
+            if (supArray != null) {
+                List<Map> supList = []
+                for (int i = 0; i < supArray.length; i++) {
+                    Throwable sup = supArray[i]
+                    supList.add(makeThrowableMap(sup))
+                }
+                thrownMap.put("suppressed", supList)
+            }
+            return thrownMap
         }
     }
 
     static class LogMessageQueueFlush implements Runnable {
-        final static int maxCreates = 20
+        final static int maxCreates = 50
         final ElasticSearchLoggerToolFactory factory
 
         LogMessageQueueFlush(ElasticSearchLoggerToolFactory factory) { this.factory = factory }
@@ -111,29 +137,28 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             }
         }
         void flushQueue() {
-            final ConcurrentLinkedQueue<String> queue = factory.logMessageQueue
-            ArrayList<String> createList = new ArrayList<>(maxCreates)
+            final ConcurrentLinkedQueue<Map> queue = factory.logMessageQueue
+            ArrayList<Map> createList = new ArrayList<>(maxCreates)
             int createCount = 0
             while (createCount < maxCreates) {
-                String message = queue.poll()
+                Map message = queue.poll()
                 if (message == null) break
                 createCount++
                 createList.add(message)
             }
             int retryCount = 5
             while (retryCount > 0) {
+                int createListSize = createList.size()
+                if (createListSize == 0) break
                 try {
-                    int createListSize = createList.size()
-                    if (createListSize == 0) break
                     long startTime = System.currentTimeMillis()
                     try {
                         BulkRequestBuilder bulkBuilder = factory.elasticSearchClient.prepareBulk()
                         for (int i = 0; i < createListSize; i++) {
-                            String curMessage = createList.get(i)
-                            curMessage.replaceAll(/\\n/, "\\\\n")
-                            // System.out.println(curMessage)
+                            Map curMessage = createList.get(i)
+                            // System.out.println(curMessage.toString())
                             bulkBuilder.add(factory.elasticSearchClient.prepareIndex(INDEX_NAME, DOC_TYPE, null)
-                                    .setSource(curMessage, XContentType.JSON))
+                                    .setSource(curMessage))
                         }
                         BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
                         if (bulkResponse.hasFailures()) {
@@ -161,7 +186,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
     final static Map docMapping = [properties:
             [timeMillis:[type:'date', format:'epoch_millis'], level:[type:'keyword'],
              thread:[type:'keyword'], threadId:[type:'long'], threadPriority:[type:'long'], endOfBatch:[type:'boolean'],
-             loggerFqcn:[type:'keyword'], loggerName:[type:'text'], name:[type:'text'], message:[type:'text'],
+             loggerFqcn:[type:'keyword'], loggerName:[type:'text'], name:[type:'text'], message:[type:'text'], context:[type:'object'],
              thrown:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'], commonElementCount:[type:'long'],
                     extendedStackTrace:stackItemMapping, suppressed:stackItemMapping,
                     cause:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
