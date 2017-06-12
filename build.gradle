@@ -58,6 +58,8 @@ dependencies {
 
     // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
     // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
+    // NOTE from additional attempt: if asm-debug-all jar goes in framework libs it gets loaded by parent/root ClassLoader so
+    //     MClassloader loaded classes, ie those in component lib directories, can't be found as it uses getClass().getClassLoader()
     // antlr4 needed for painless script module
     // compile 'org.antlr:antlr4-runtime:4.5.3'
 

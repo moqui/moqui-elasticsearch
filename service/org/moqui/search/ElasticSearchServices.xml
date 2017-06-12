@@ -13,7 +13,8 @@ along with this software (see the LICENSE.md file). If not, see
 <http://creativecommons.org/publicdomain/zero/1.0/>.
 -->
 <services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.1.xsd">
-    <service verb="delete" noun="Documents">
+    <service verb="delete" noun="Documents" authenticate="anonymous-all" transaction-timeout="1800">
+        <!-- authenticate=anonymous-all as this is called in a service job, should be exposed through only trusted UI/etc -->
         <in-parameters>
             <parameter name="indexName" required="true"/>
             <parameter name="documentType"/>
@@ -34,7 +35,8 @@ along with this software (see the LICENSE.md file). If not, see
 
             ExecutionContext ec = context.ec
 
-            if (!daysToKeep && !queryString) {
+            // ec.logger.warn("delete#DataDocuments ${documentType} documents from index ${indexName} with days to keep ${daysToKeep} and query ${queryString}")
+            if (daysToKeep == null && !queryString) {
                 ec.message.addError("To delete documents must specify daysToKeep, queryString, or both")
                 return
             }
@@ -42,7 +44,7 @@ along with this software (see the LICENSE.md file). If not, see
             Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
 
             Long thruMillis = null
-            if (daysToKeep) {
+            if (daysToKeep != null) {
                 Calendar basisCal = ec.user.getCalendarSafe()
                 basisCal.add(Calendar.DAY_OF_YEAR, (int) -daysToKeep)
                 thruMillis = basisCal.getTimeInMillis()
@@ -58,9 +60,16 @@ along with this software (see the LICENSE.md file). If not, see
                 srb.setQuery(QueryBuilders.queryStringQuery((String) queryString))
             } else if (thruMillis) {
                 srb.setQuery(QueryBuilders.rangeQuery(timestampField).lte(thruMillis))
+            } else {
+                ec.message.addError("To delete documents must specify daysToKeep, queryString, or both")
+                return
             }
 
             deletedCount = req.get().getDeleted()
+
+            String resultMsg = "Deleted ${deletedCount} type ${documentType} documents from index ${indexName} with days to keep ${daysToKeep} and query ${queryString}".toString()
+            ec.logger.info(resultMsg)
+            ec.message.addMessage(resultMsg)
         ]]></script></actions>
     </service>
 </services>
