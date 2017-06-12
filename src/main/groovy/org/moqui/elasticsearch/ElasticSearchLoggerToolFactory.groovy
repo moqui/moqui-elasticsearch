@@ -23,6 +23,8 @@ import org.elasticsearch.action.bulk.BulkRequestBuilder
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.client.Client
 import org.elasticsearch.transport.TransportException
+import org.moqui.BaseArtifactException
+import org.moqui.context.ArtifactExecutionInfo
 import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.LogEventSubscriber
 import org.moqui.context.ToolFactory
@@ -119,6 +121,11 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             }
             Map<String, Object> thrownMap = [name:thrown.class.name, message:thrown.message,
                     localizedMessage:thrown.localizedMessage, stackTrace:stList] as Map<String, Object>
+            if (thrown instanceof BaseArtifactException) {
+                BaseArtifactException bae = (BaseArtifactException) thrown
+                Deque<ArtifactExecutionInfo> aeiList = bae.getArtifactStack()
+                if (aeiList != null && aeiList.size() > 0) thrownMap.put("artifactStack", aeiList.collect({ it.toBasicString() }))
+            }
             Throwable cause = thrown.cause
             if (cause != null) thrownMap.put("cause", makeThrowableMap(cause))
             Throwable[] supArray = thrown.suppressed
@@ -160,7 +167,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
                 int createListSize = createList.size()
                 if (createListSize == 0) break
                 try {
-                    long startTime = System.currentTimeMillis()
+                    // long startTime = System.currentTimeMillis()
                     try {
                         BulkRequestBuilder bulkBuilder = factory.elasticSearchClient.prepareBulk()
                         for (int i = 0; i < createListSize; i++) {
@@ -175,8 +182,12 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
                         }
                     } catch (TransportException te) {
                         String message = te.getMessage()
-                        if (message && message.toLowerCase().contains("stopped")) factory.disabled = true
-                        System.out.println("Stopping ElasticSearch logging, transport error: ${te.toString()}")
+                        if (message && message.toLowerCase().contains("stopped")) {
+                            factory.disabled = true
+                            System.out.println("Stopping ElasticSearch logging, transport error: ${te.toString()}")
+                        } else {
+                            System.out.println("Error logging to ElasticSearch: ${te.toString()}")
+                        }
                     } catch (Exception e) {
                         System.out.println("Error logging to ElasticSearch: ${e.toString()}")
                     }
@@ -190,18 +201,16 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
         }
     }
 
-    final static Map stackItemMapping = [type:'object', properties:[class:[type:'text'], method:[type:'text'], file:[type:'text'],
-            line:[type:'long']]]
     final static Map docMapping = [properties:
             ['@timestamp':[type:'date', format:'epoch_millis'], level:[type:'keyword'], thread_name:[type:'keyword'],
                     thread_id:[type:'long'], thread_priority:[type:'long'], user_id:[type:'keyword'], visitor_id:[type:'keyword'],
                     logger_name:[type:'text'], name:[type:'text'], message:[type:'text'], mdc:[type:'object'],
                     thrown:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
-                            stackTrace:[type:'text'],
+                            stackTrace:[type:'text'], artifactStack:[type:'text'],
                             suppressed:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
                                     commonElementCount:[type:'long'], stackTrace:[type:'text']]],
                             cause:[type:'object', properties:[name:[type:'text'], message:[type:'text'], localizedMessage:[type:'text'],
-                                    commonElementCount:[type:'long'], stackTrace:[type:'text']]]
+                                    commonElementCount:[type:'long'], stackTrace:[type:'text'], artifactStack:[type:'text']]]
             ]]
     ]]
 }
