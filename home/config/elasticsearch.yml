@@ -13,19 +13,23 @@
 # ---------------------------------- Cluster -----------------------------------
 #
 # Use a descriptive name for your cluster:
-#
-#cluster.name: my-application
-#
+
+cluster.name: MoquiElasticSearch
+
 # ------------------------------------ Node ------------------------------------
 #
 # Use a descriptive name for the node:
-#
-#node.name: node-1
-#
+
+node.name: MoquiLocal
+
 # Add custom attributes to the node:
 #
 #node.attr.rack: r1
-#
+
+node.master: true
+node.data: true
+node.ingest: true
+
 # ----------------------------------- Paths ------------------------------------
 #
 # Path to directory where to store the data (separate multiple locations by comma):
@@ -51,9 +55,16 @@
 # ---------------------------------- Network -----------------------------------
 #
 # Set the bind address to a specific IP (IPv4 or IPv6):
-#
-#network.host: 192.168.0.1
-#
+
+network.host: _local_
+transport.type: local
+discovery.type: single-node
+
+# CORS settings for local testing only
+# http.cors.enabled: true
+# http.cors.allow-origin: '*'
+http.enabled: true
+
 # Set a custom port for HTTP:
 #
 #http.port: 9200
@@ -94,18 +105,6 @@
 #
 #action.destructive_requires_name: true
 
-
-# ========== Settings added for Moqui ==========
-
-# CORS settings for local testing only
-# http.cors.enabled: true
-# http.cors.allow-origin: '*'
-http.enabled: false
-
-cluster.name: MoquiElasticSearch
-transport.type: local
-discovery.type: single-node
-
 # ---------------------------------- Script ------------------------------------
 
 script.inline: true
@@ -126,8 +125,6 @@ script.engine.groovy.inline.aggs: true
 # script.engine.groovy.inline.ingest: off
 # script.engine.groovy.inline.search: off
 # script.engine.groovy.inline.update: off
-
-# plugin.mandatory: lang-groovy
 
 # moqui-elasticsearch now uses bulk indexing for everything, so use a bigger queue
 # default is 50 for bulk queue, default is 200 for index queue

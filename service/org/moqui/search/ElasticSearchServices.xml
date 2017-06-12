@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.1.xsd">
+    <service verb="delete" noun="Documents">
+        <in-parameters>
+            <parameter name="indexName" required="true"/>
+            <parameter name="documentType"/>
+            <parameter name="timestampField" default-value="@timestamp"/>
+            <parameter name="daysToKeep" type="Integer"/>
+            <parameter name="queryString"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="deletedCount" type="Long"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import org.elasticsearch.action.search.SearchRequestBuilder
+            import org.elasticsearch.client.Client
+            import org.elasticsearch.index.query.QueryBuilders
+            import org.elasticsearch.index.reindex.DeleteByQueryAction
+            import org.elasticsearch.index.reindex.DeleteByQueryRequestBuilder
+            import org.moqui.context.ExecutionContext
+
+            ExecutionContext ec = context.ec
+
+            if (!daysToKeep && !queryString) {
+                ec.message.addError("To delete documents must specify daysToKeep, queryString, or both")
+                return
+            }
+
+            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
+
+            Long thruMillis = null
+            if (daysToKeep) {
+                Calendar basisCal = ec.user.getCalendarSafe()
+                basisCal.add(Calendar.DAY_OF_YEAR, (int) -daysToKeep)
+                thruMillis = basisCal.getTimeInMillis()
+            }
+
+            DeleteByQueryRequestBuilder req = new DeleteByQueryRequestBuilder(elasticSearchClient, DeleteByQueryAction.INSTANCE)
+            SearchRequestBuilder srb = req.source().setIndices(indexName)
+            if (documentType) srb.setTypes(documentType)
+            if (queryString && thruMillis) {
+                srb.setQuery(QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery((String) queryString))
+                        .must(QueryBuilders.rangeQuery(timestampField).lte(thruMillis)))
+            } else if (queryString) {
+                srb.setQuery(QueryBuilders.queryStringQuery((String) queryString))
+            } else if (thruMillis) {
+                srb.setQuery(QueryBuilders.rangeQuery(timestampField).lte(thruMillis))
+            }
+
+            deletedCount = req.get().getDeleted()
+        ]]></script></actions>
+    </service>
+</services>
