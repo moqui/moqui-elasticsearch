@@ -47,8 +47,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             // Make sure all indices exist
             if (verifyIndexes) {
-                Set indexNames = new HashSet()
-                for (Map document in documentList) indexNames.add(document._index)
+                Set indexNames = new HashSet(documentList*._index)
                 for (String indexName in indexNames) ElasticSearchUtil.checkCreateIndex(indexName, ec)
             }
 
@@ -62,21 +61,23 @@ along with this software (see the LICENSE.md file). If not, see
                 String _index = document._index
                 String _type = document._type
                 String _id = document._id
-                String _timestamp = document._timestamp
+                // String _timestamp = document._timestamp
                 // As of ES 2.0 _index, _type, _id, and _timestamp shouldn't be in document to be indexed
                 document.remove('_index'); document.remove('_type'); document.remove('_id'); document.remove('_timestamp')
+
+                // to better separate very different documents and prepare for ES6 the index name for ES is the dataDocumentId (_type) lower cased
+                String esIndexName = ElasticSearchUtil.ddIdToEsIndex(_type)
 
                 if (getOriginalDocuments) {
                     // this may fail for a number of reasons, like index doesn't exist yet, so catch the exception
                     try {
-                        GetResponse gr = elasticSearchClient.prepareGet(_index, _type, _id).execute().actionGet()
+                        GetResponse gr = elasticSearchClient.prepareGet(esIndexName, _type, _id).execute().actionGet()
                         Map originalDocument = gr.getSourceAsMap()
                         if (originalDocument != null) {
                             // As of ES 2.0 _index, _type, _id aren't included in the document
                             originalDocument._index = gr.getIndex()
                             originalDocument._type = gr.getType()
                             originalDocument._id = gr.getId()
-                            // how to get timestamp? doesn't seem to be in API: document._timestamp = hit.get?
                             originalDocument._version = gr.getVersion()
                             originalDocumentList.add(originalDocument ?: [:])
                         } else {
@@ -87,8 +88,8 @@ along with this software (see the LICENSE.md file). If not, see
                         originalDocumentList.add([:])
                     }
                 }
-                bulkBuilder.add(elasticSearchClient.prepareIndex(_index, _type, _id)
-                        .setIndex(_index).setType(_type).setId(_id).setTimestamp(_timestamp).setSource(document))
+                bulkBuilder.add(elasticSearchClient.prepareIndex(esIndexName, _type, _id).setSource(document))
+                // .setIndex(esIndexName).setType(_type).setId(_id)
                 curBulkDocs++
 
                 if (curBulkDocs >= docsPerBulk) {
@@ -106,14 +107,6 @@ along with this software (see the LICENSE.md file). If not, see
                     curBulkDocs = 0
                     bulkBuilder = elasticSearchClient.prepareBulk()
                 }
-
-                // Individual index operation approach
-                // IndexResponse response = elasticSearchClient.prepareIndex(_index, _type, _id)
-                //         .setIndex(_index).setType(_type).setId(_id).setTimestamp(_timestamp)
-                //         .setSource(document).execute().actionGet()
-                // documentVersionList.add(response.getVersion())
-                // if (logger.isTraceEnabled()) logger.trace("Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}]")
-                // logger.warn("====== Indexed [${_index}, ${_type}, ${_id}] version [${response.getVersion()}] created? ${response.isCreated()}}")
             }
             if (curBulkDocs > 0) {
                 BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
@@ -278,7 +271,16 @@ along with this software (see the LICENSE.md file). If not, see
             documentList = []
 
             // make sure index exists
-            ElasticSearchUtil.checkCreateIndex(indexName, ec)
+            if (!ElasticSearchUtil.checkIndexExists(indexName, ec)) {
+                ec.loggerFacade.warn("Tried to search with indexName ${indexName} that does not exist, returning empty list")
+                documentListCount = 0
+                documentListPageIndex = pageIndex
+                documentListPageSize = pageSize
+                documentListPageMaxIndex = 0
+                documentListPageRangeLow = 0
+                documentListPageRangeHigh = 0
+                return
+            }
 
             // get the search hits
             SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
@@ -379,7 +381,10 @@ along with this software (see the LICENSE.md file). If not, see
 
             Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
             // make sure index exists
-            ElasticSearchUtil.checkCreateIndex(indexName, ec)
+            if (!ElasticSearchUtil.checkIndexExists(indexName, ec)) {
+                ec.loggerFacade.warn("Tried to search with indexName ${indexName} that does not exist, returning null response")
+                return
+            }
 
             // get the search hits (.setSearchType('count'))
             SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName).setSize(maxResults)

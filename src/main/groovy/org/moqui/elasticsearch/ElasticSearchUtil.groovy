@@ -16,8 +16,6 @@ package org.moqui.elasticsearch
 import groovy.json.JsonBuilder
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
 import org.elasticsearch.action.search.SearchRequestBuilder
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.client.Client
@@ -41,45 +39,53 @@ import org.slf4j.LoggerFactory
 class ElasticSearchUtil {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticSearchUtil.class)
 
+    static String ddIdToEsIndex(String dataDocumentId) {
+        if (dataDocumentId.contains("_")) return dataDocumentId.toLowerCase()
+        return EntityJavaUtil.camelCaseToUnderscored(dataDocumentId).toLowerCase()
+    }
+
+    // NOTE: called in service scripts
+    static boolean checkIndexExists(String indexName, ExecutionContextImpl eci) {
+        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
+        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return true
+        return client.admin().indices().prepareExists(indexName).get().exists
+    }
+
     // NOTE: called in service scripts
     static void checkCreateIndex(String indexName, ExecutionContextImpl eci) {
-        String baseIndexName = indexName.contains("__") ? indexName.substring(indexName.indexOf("__") + 2) : indexName
-
         Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-        boolean hasIndex = client.admin().indices().exists(new IndicesExistsRequest(indexName)).actionGet().exists
-        // logger.warn("========== Checking index ${indexName} (${baseIndexName}), hasIndex=${hasIndex}")
-        if (hasIndex) return
 
-        logger.info("Creating ElasticSearch index ${indexName} (${baseIndexName}) and adding document mappings")
+        // if the index alias exists call it good
+        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return
 
-        CreateIndexRequestBuilder cirb = client.admin().indices().prepareCreate(indexName)
+        EntityList ddList = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", indexName).list()
+        for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd, client, eci)
+    }
 
-        EntityList ddList = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", baseIndexName).list()
-        for (EntityValue dd in ddList) {
-            Map docMapping = makeElasticSearchMapping((String) dd.dataDocumentId, eci)
-            cirb.addMapping((String) dd.dataDocumentId, docMapping)
-            // logger.warn("========== Added mapping for ${dd.dataDocumentId} to index ${indexName}:\n${docMapping}")
-
+    static void storeIndexAndMapping(String indexName, EntityValue dd, Client client, ExecutionContextImpl eci) {
+        String dataDocumentId = (String) dd.getNoCheckSimple("dataDocumentId")
+        String esIndexName = ddIdToEsIndex(dataDocumentId)
+        boolean hasIndex = client.admin().indices().prepareExists(esIndexName).get().exists
+        // logger.warn("========== Checking index ${esIndexName} with alias ${indexName} , hasIndex=${hasIndex}")
+        Map docMapping = makeElasticSearchMapping(dataDocumentId, eci)
+        if (hasIndex) {
+            logger.info("Updating ElasticSearch index ${esIndexName} for ${dataDocumentId} with alias ${indexName} document mapping")
+            client.admin().indices().preparePutMapping(esIndexName).setType(dataDocumentId).setSource(docMapping).get()
+        } else {
+            logger.info("Creating ElasticSearch index ${esIndexName} for ${dataDocumentId} with alias ${indexName} and adding document mapping")
+            client.admin().indices().prepareCreate(esIndexName).addMapping(dataDocumentId, docMapping).get()
+            // logger.warn("========== Added mapping for ${dataDocumentId} to index ${esIndexName}:\n${docMapping}")
+            // add an alias (indexName) for the index (dataDocumentId.toLowerCase())
+            client.admin().indices().prepareAliases().addAlias(esIndexName, indexName).get()
         }
-        cirb.execute().actionGet()
     }
 
     // NOTE: called in service scripts
     static void putIndexMappings(String indexName, ExecutionContextImpl eci) {
-        String baseIndexName = indexName.contains("__") ? indexName.substring(indexName.indexOf("__") + 2) : indexName
-
         Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-        boolean hasIndex = client.admin().indices().exists(new IndicesExistsRequest(indexName)).actionGet().isExists()
-        if (!hasIndex) {
-            client.admin().indices().prepareCreate(indexName).execute().actionGet()
-        }
 
-        EntityList ddList = eci.entity.find("moqui.entity.document.DataDocument").condition("indexName", baseIndexName).list()
-        for (EntityValue dd in ddList) {
-            Map docMapping = makeElasticSearchMapping((String) dd.dataDocumentId, eci)
-            client.admin().indices().preparePutMapping(indexName).setType((String) dd.dataDocumentId)
-                    .setSource(docMapping).execute().actionGet() // .setIgnoreConflicts(true) no longer supported?
-        }
+        EntityList ddList = eci.entity.find("moqui.entity.document.DataDocument").condition("indexName", indexName).list()
+        for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd, client, eci)
     }
 
     static final Map<String, String> esTypeMap = [id:'keyword', 'id-long':'keyword', date:'date', time:'text',
@@ -192,7 +198,7 @@ class ElasticSearchUtil {
         checkCreateIndex(indexName, eci)
 
         // get the search hits
-        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName).setSize(maxResults)
+        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setSize(maxResults)
         if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
         srb.setQuery(QueryBuilders.wrapperQuery(queryJson))
         srb.addAggregation(aggBuilder)
