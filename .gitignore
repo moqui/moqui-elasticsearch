@@ -2,8 +2,6 @@
 # runtime added files
 build/
 lib/
-home/modules/lang-expression/*.jar
-home/modules/lang-painless/*.jar
 
 # IntelliJ IDEA files
 .idea/
