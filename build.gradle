@@ -37,6 +37,11 @@ repositories {
     jcenter()
 }
 
+sourceSets {
+    langPainless
+    langExpression
+}
+
 dependencies {
     compile project(':framework')
 
@@ -56,6 +61,8 @@ dependencies {
     compile 'org.codelibs.elasticsearch.module:transport-netty4:5.4.1'
     compile 'org.codelibs.elasticsearch.module:reindex:5.4.1'
 
+    langExpressionRuntime 'org.codelibs.elasticsearch.module:lang-expression:5.4.1'
+    langPainlessRuntime 'org.codelibs.elasticsearch.module:lang-painless:5.4.1'
     // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
     // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
     // NOTE from additional attempt: if asm-debug-all jar goes in framework libs it gets loaded by parent/root ClassLoader so
@@ -67,7 +74,11 @@ dependencies {
 
 // by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
 check.dependsOn.remove(test)
-task cleanLib(type: Delete) { delete fileTree(dir: projectDir.absolutePath+'/lib', include: '*') }
+task cleanLib(type: Delete) {
+    delete fileTree(dir: projectDir.absolutePath + '/lib', include: '*')
+    delete fileTree(dir: projectDir.absolutePath + '/home/modules/lang-expression', include: '*.jar')
+    delete fileTree(dir: projectDir.absolutePath + '/home/modules/lang-painless', include: '*.jar')
+}
 clean.dependsOn cleanLib
 
 jar {
@@ -77,6 +88,8 @@ jar {
 task copyDependencies { doLast {
     copy { from (configurations.runtime - project(':framework').configurations.runtime - project(':framework').jar.archivePath)
         into file(projectDir.absolutePath + '/lib') }
+    copy { from (configurations.langExpressionRuntime) into file(projectDir.absolutePath + '/home/modules/lang-expression') }
+    copy { from (configurations.langPainlessRuntime) into file(projectDir.absolutePath + '/home/modules/lang-painless') }
 } }
 copyDependencies.dependsOn cleanLib
 jar.dependsOn copyDependencies
