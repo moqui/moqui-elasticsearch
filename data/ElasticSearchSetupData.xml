@@ -13,6 +13,9 @@ along with this software (see the LICENSE.md file). If not, see
 <http://creativecommons.org/publicdomain/zero/1.0/>.
 -->
 <entity-facade-xml type="seed">
+    <moqui.screen.SubscreensItem screenLocation="component://tools/screen/System.xml" subscreenName="LogViewer" menuTitle="Log Viewer"
+            menuIndex="20" menuInclude="Y" subscreenLocation="component://moqui-elasticsearch/screen/System/LogViewer.xml"/>
+
     <!-- ========== ElasticSearch Scheduled ServiceJob Data ========== -->
     <!-- Handy cron strings: [0 0 2 * * ?] every night at 2:00 am, [0 0/15 * * * ?] every 15 minutes, [0 0/2 * * * ?] every 2 minutes -->
 
