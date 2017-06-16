@@ -30,6 +30,7 @@ import org.moqui.context.LogEventSubscriber
 import org.moqui.context.ToolFactory
 import org.moqui.impl.context.ExecutionContextFactoryImpl
 
+import java.sql.Timestamp
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 
@@ -143,6 +144,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
 
     static class LogMessageQueueFlush implements Runnable {
         final static int maxCreates = 50
+        final static int sameTsMaxCreates = 100
         final ElasticSearchLoggerToolFactory factory
 
         LogMessageQueueFlush(ElasticSearchLoggerToolFactory factory) { this.factory = factory }
@@ -156,11 +158,31 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             final ConcurrentLinkedQueue<Map> queue = factory.logMessageQueue
             ArrayList<Map> createList = new ArrayList<>(maxCreates)
             int createCount = 0
-            while (createCount < maxCreates) {
+            long lastTimestamp = 0
+            int sameTsCount = 0
+            while (createCount < sameTsMaxCreates) {
                 Map message = queue.poll()
                 if (message == null) break
+                // add 1ms to timestamp if same as last so in search messages are in a better order; on busy servers this will require filtering by thread_id
+                boolean sameTs = false
+                try {
+                    long timestamp = message.get("@timestamp") as long
+                    if (timestamp == lastTimestamp) {
+                        sameTsCount++
+                        timestamp += sameTsCount
+                        message.put("@timestamp", timestamp)
+                        sameTs = true
+                    } else {
+                        lastTimestamp = timestamp
+                        sameTsCount = 0
+                    }
+                } catch (Throwable t) {
+                    System.out.println("Error checking subsequent timestamp in ES log message: " + t.toString())
+                }
+                // increment the count and add the message
                 createCount++
                 createList.add(message)
+                if (!sameTs && createCount >= maxCreates) break
             }
             int retryCount = 5
             while (retryCount > 0) {
