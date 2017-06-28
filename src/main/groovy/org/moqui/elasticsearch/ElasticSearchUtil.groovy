@@ -28,6 +28,7 @@ import org.moqui.entity.EntityException
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
 import org.moqui.impl.context.ExecutionContextImpl
+import org.moqui.impl.entity.EntityDataDocument
 import org.moqui.impl.entity.EntityDefinition
 import org.moqui.impl.entity.EntityJavaUtil
 import org.moqui.impl.entity.FieldInfo
@@ -113,24 +114,31 @@ class ElasticSearchUtil {
 
         List<String> remainingPkFields = new ArrayList(primaryEd.getPkFieldNames())
         for (EntityValue dataDocumentField in dataDocumentFieldList) {
-            String fieldPath = dataDocumentField.fieldPath
-            if (!fieldPath.contains(':')) {
+            String fieldPath = (String) dataDocumentField.fieldPath
+            ArrayList<String> fieldPathElementList = EntityDataDocument.fieldPathToList(fieldPath)
+            if (fieldPathElementList.size() == 1) {
                 // is a field on the primary entity, put it there
-                String fieldName = dataDocumentField.fieldNameAlias ?: dataDocumentField.fieldPath
-                FieldInfo fieldInfo = primaryEd.getFieldInfo((String) dataDocumentField.fieldPath)
-                if (fieldInfo == null) throw new EntityException("Could not find field [${dataDocumentField.fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                rootProperties.put(fieldName, makePropertyMap(fieldInfo.type, dataDocumentField.sortable as String))
+                String fieldName = ((String) dataDocumentField.fieldNameAlias) ?: fieldPath
+                String mappingType = (String) dataDocumentField.fieldType
+                String sortable = (String) dataDocumentField.sortable
+                if (fieldPath.startsWith("(")) {
+                    rootProperties.put(fieldName, makePropertyMap(null, mappingType ?: 'double', sortable))
+                } else {
+                    FieldInfo fieldInfo = primaryEd.getFieldInfo(fieldPath)
+                    if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPath}] for entity [${primaryEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
+                    rootProperties.put(fieldName, makePropertyMap(fieldInfo.type, mappingType, sortable))
+                    if (remainingPkFields.contains(fieldPath)) remainingPkFields.remove(fieldPath)
+                }
 
-                if (remainingPkFields.contains(dataDocumentField.fieldPath)) remainingPkFields.remove((String) dataDocumentField.fieldPath)
                 continue
             }
 
-            Iterator<String> fieldPathElementIter = fieldPath.split(":").iterator()
             Map<String, Object> currentProperties = rootProperties
             EntityDefinition currentEd = primaryEd
-            while (fieldPathElementIter.hasNext()) {
-                String fieldPathElement = fieldPathElementIter.next()
-                if (fieldPathElementIter.hasNext()) {
+            int fieldPathElementListSize = fieldPathElementList.size()
+            for (int i = 0; i < fieldPathElementListSize; i++) {
+                String fieldPathElement = (String) fieldPathElementList.get(i)
+                if (i < (fieldPathElementListSize - 1)) {
                     EntityJavaUtil.RelationshipInfo relInfo = currentEd.getRelationshipInfo(fieldPathElement)
                     if (relInfo == null) throw new EntityException("Could not find relationship [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
                     currentEd = relInfo.relatedEd
@@ -154,11 +162,15 @@ class ElasticSearchUtil {
                     }
                 } else {
                     String fieldName = (String) dataDocumentField.fieldNameAlias ?: fieldPathElement
-                    FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
-                    if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
-                    currentProperties.put(fieldName, makePropertyMap(fieldInfo.type, dataDocumentField.sortable as String))
-
-                    // logger.info("DataDocument ${dataDocumentId} field ${fieldName}, propertyMap: ${propertyMap}")
+                    String mappingType = (String) dataDocumentField.fieldType
+                    String sortable = (String) dataDocumentField.sortable
+                    if (fieldPathElement.startsWith("(")) {
+                        currentProperties.put(fieldName, makePropertyMap(null, mappingType ?: 'double', sortable))
+                    } else {
+                        FieldInfo fieldInfo = currentEd.getFieldInfo(fieldPathElement)
+                        if (fieldInfo == null) throw new EntityException("Could not find field [${fieldPathElement}] for entity [${currentEd.getFullEntityName()}] in DataDocument [${dataDocumentId}]")
+                        currentProperties.put(fieldName, makePropertyMap(fieldInfo.type, mappingType, sortable))
+                    }
                 }
             }
         }
@@ -166,10 +178,9 @@ class ElasticSearchUtil {
         // now get all the PK fields not aliased explicitly
         for (String remainingPkName in remainingPkFields) {
             FieldInfo fieldInfo = primaryEd.getFieldInfo(remainingPkName)
-            String fieldType = fieldInfo.type
-            String mappingType = esTypeMap.get(fieldType) ?: 'keyword'
-            Map propertyMap = [type:mappingType]
-            // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
+            String mappingType = esTypeMap.get(fieldInfo.type) ?: 'keyword'
+            Map propertyMap = makePropertyMap(null, mappingType, null)
+            // don't use not_analyzed in more recent ES: if (fieldInfo.type.startsWith("id")) propertyMap.index = 'not_analyzed'
             rootProperties.put(remainingPkName, propertyMap)
         }
 
@@ -177,9 +188,10 @@ class ElasticSearchUtil {
 
         return mappingMap
     }
-    static Map makePropertyMap(String fieldType, String sortable) {
-        String mappingType = esTypeMap.get(fieldType) ?: 'text'
-        Map<String, Object> propertyMap = [type:mappingType as Object]
+    static Map makePropertyMap(String fieldType, String mappingType, String sortable) {
+        if (!mappingType) mappingType = esTypeMap.get(fieldType) ?: 'text'
+        Map<String, Object> propertyMap = new LinkedHashMap<>()
+        propertyMap.put("type", mappingType)
         if ("Y".equals(sortable) && "text".equals(mappingType)) propertyMap.put("fields", [keyword: [type: "keyword"]])
         if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
