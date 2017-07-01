@@ -18,6 +18,12 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.screen.SubscreensItem screenLocation="component://webroot/screen/webroot.xml" menuInclude="N"
             subscreenName="elastichq" subscreenLocation="component://moqui-elasticsearch/screen/elastichq.xml"/>
 
+    <moqui.security.UserPermission userPermissionId="ElasticRemote" description="ElasticSearch Remote Access"/>
+    <moqui.security.UserGroupPermission userGroupId="ADMIN" userPermissionId="ElasticRemote" fromDate="0"/>
+
+    <moqui.security.UserPermission userPermissionId="KibanaRemote" description="Kibana Remote Access"/>
+    <moqui.security.UserGroupPermission userGroupId="ADMIN" userPermissionId="KibanaRemote" fromDate="0"/>
+
     <!-- ========== ElasticSearch Scheduled ServiceJob Data ========== -->
     <!-- Handy cron strings: [0 0 2 * * ?] every night at 2:00 am, [0 0/15 * * * ?] every 15 minutes, [0 0/2 * * * ?] every 2 minutes -->
 

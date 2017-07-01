@@ -9,22 +9,30 @@
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchToolFactory" init-priority="15" disabled="false"/>
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchLoggerToolFactory" init-priority="16" disabled="false"/>
     </tools>
-    <!--
     <webapp-list>
         <webapp name="webroot">
+            <filter name="ElasticAuthFilter" class="org.moqui.impl.webapp.MoquiAuthFilter" async-supported="true">
+                <init-param name="permission" value="ElasticRemote"/>
+                <url-pattern>/elastic/*</url-pattern>
+            </filter>
+            <filter name="KibanaAuthFilter" class="org.moqui.impl.webapp.MoquiAuthFilter" async-supported="true">
+                <init-param name="permission" value="KibanaRemote"/>
+                <url-pattern>/kibana/*</url-pattern>
+            </filter>
+
             <servlet name="ElasticSearchProxy" class="org.eclipse.jetty.proxy.ProxyServlet$Transparent" load-on-startup="1" async-supported="true">
-                <!- - this proxies to the embedded ElasticSearch instance - ->
+                <!-- this proxies to the embedded ElasticSearch instance -->
                 <init-param name="proxyTo" value="http://localhost:9200"/>
                 <init-param name="prefix" value="/elastic"/>
                 <url-pattern>/elastic/*</url-pattern>
             </servlet>
             <servlet name="KibanaProxy" class="org.eclipse.jetty.proxy.ProxyServlet$Transparent" load-on-startup="1" async-supported="true">
-                <!- - in kibana.yml set server.basePath: "/kibana" - ->
+                <!-- this proxies to a Kibana instance run locally, in another container, etc -->
+                <!-- in kibana.yml set server.basePath: "/kibana" -->
                 <init-param name="proxyTo" value="http://${kibana_host}:${kibana_port}"/>
                 <init-param name="prefix" value="/kibana"/>
                 <url-pattern>/kibana/*</url-pattern>
             </servlet>
         </webapp>
     </webapp-list>
-    -->
 </moqui-conf>
