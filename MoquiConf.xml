@@ -1,8 +1,30 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!-- No copyright or license for configuration file, details here are not considered a creative work. -->
 <moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-2.1.xsd">
+
+    <default-property name="kibana_host" value="localhost"/>
+    <default-property name="kibana_port" value="5601"/>
+
     <tools>
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchToolFactory" init-priority="15" disabled="false"/>
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchLoggerToolFactory" init-priority="16" disabled="false"/>
     </tools>
+    <!--
+    <webapp-list>
+        <webapp name="webroot">
+            <servlet name="ElasticSearchProxy" class="org.eclipse.jetty.proxy.ProxyServlet$Transparent" load-on-startup="1" async-supported="true">
+                <!- - this proxies to the embedded ElasticSearch instance - ->
+                <init-param name="proxyTo" value="http://localhost:9200"/>
+                <init-param name="prefix" value="/elastic"/>
+                <url-pattern>/elastic/*</url-pattern>
+            </servlet>
+            <servlet name="KibanaProxy" class="org.eclipse.jetty.proxy.ProxyServlet$Transparent" load-on-startup="1" async-supported="true">
+                <!- - in kibana.yml set server.basePath: "/kibana" - ->
+                <init-param name="proxyTo" value="http://${kibana_host}:${kibana_port}"/>
+                <init-param name="prefix" value="/kibana"/>
+                <url-pattern>/kibana/*</url-pattern>
+            </servlet>
+        </webapp>
+    </webapp-list>
+    -->
 </moqui-conf>

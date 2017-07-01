@@ -1,4 +1,7 @@
 
+# build added files
+screen/elastichq/
+
 # runtime added files
 build/
 lib/
