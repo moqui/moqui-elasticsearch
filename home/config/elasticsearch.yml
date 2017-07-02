@@ -56,10 +56,8 @@ node.ingest: true
 #
 # Set the bind address to a specific IP (IPv4 or IPv6):
 
-# By default use _local_ for local-only access and moqui-server for default docker instance on docker-internal network
-network.host:
-  - _local_
-  - moqui-server
+# By default use _site_ for localhost or any local network including docker container virtual network
+network.host: _site_
 transport.type: local
 discovery.type: single-node
 
