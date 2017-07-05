@@ -56,8 +56,10 @@ node.ingest: true
 #
 # Set the bind address to a specific IP (IPv4 or IPv6):
 
-# By default use _site_ for localhost or any local network including docker container virtual network
-network.host: _site_
+# By default use _local_ and _site_ for localhost or any local network including docker container virtual network
+network.host:
+  - _site_
+  - _local_
 transport.type: local
 discovery.type: single-node
 
