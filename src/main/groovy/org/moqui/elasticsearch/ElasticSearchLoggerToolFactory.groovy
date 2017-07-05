@@ -30,7 +30,6 @@ import org.moqui.context.LogEventSubscriber
 import org.moqui.context.ToolFactory
 import org.moqui.impl.context.ExecutionContextFactoryImpl
 
-import java.sql.Timestamp
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 
@@ -73,7 +72,6 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             LogMessageQueueFlush lmqf = new LogMessageQueueFlush(this)
             ecfi.scheduledExecutor.scheduleAtFixedRate(lmqf, 2, 1, TimeUnit.SECONDS)
         }
-
     }
     @Override void preFacadeInit(ExecutionContextFactory ecf) { }
 

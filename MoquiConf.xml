@@ -11,6 +11,10 @@
     </tools>
     <webapp-list>
         <webapp name="webroot">
+            <filter name="ElasticRequestLogFilter" class="org.moqui.elasticsearch.ElasticRequestLogFilter" async-supported="true">
+                <url-pattern>/*</url-pattern>
+            </filter>
+
             <filter name="ElasticAuthFilter" class="org.moqui.impl.webapp.MoquiAuthFilter" async-supported="true">
                 <init-param name="permission" value="ElasticRemote"/>
                 <url-pattern>/elastic/*</url-pattern>
