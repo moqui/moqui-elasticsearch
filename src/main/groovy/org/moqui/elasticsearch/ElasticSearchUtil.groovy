@@ -53,7 +53,7 @@ class ElasticSearchUtil {
     }
 
     // NOTE: called in service scripts
-    static void checkCreateIndex(String indexName, ExecutionContextImpl eci) {
+    static synchronized void checkCreateIndex(String indexName, ExecutionContextImpl eci) {
         Client client = (Client) eci.getTool("ElasticSearch", Client.class)
 
         // if the index alias exists call it good
