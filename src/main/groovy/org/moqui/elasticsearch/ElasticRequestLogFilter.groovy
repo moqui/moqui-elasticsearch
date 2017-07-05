@@ -78,13 +78,14 @@ class ElasticRequestLogFilter implements Filter {
     final static Map docMapping = [properties:
         ['@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'], server_ip:[type:'ip'],
             request_method:[type:'keyword'], request_scheme:[type:'keyword'], request_host:[type:'keyword'],
-            request_path:[type:'text'], request_query:[type:'text'],
-            http_version:[type:'half_float'], response:[type:'integer'], bytes:[type:'long'], referrer:[type:'text'], agent:[type:'text']
+            request_path:[type:'text'], request_query:[type:'text'], http_version:[type:'half_float'],
+            response:[type:'short'], time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'], referrer:[type:'text'], agent:[type:'text']
         ]
     ]
 
     @Override
     void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
+        long startTime = System.currentTimeMillis()
         // chain first so response is run
         chain.doFilter(req, resp)
 
@@ -94,7 +95,9 @@ class ElasticRequestLogFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) req
         HttpServletResponse response = (HttpServletResponse) resp
 
-        String clientIpAddress = request.getRemoteAddr()
+        long initialTime = System.currentTimeMillis() - startTime
+
+                String clientIpAddress = request.getRemoteAddr()
         String forwardedFor = request.getHeader("X-Forwarded-For")
         if (forwardedFor != null && !forwardedFor.isEmpty()) clientIpAddress = forwardedFor.split(",")[0].trim()
 
@@ -105,12 +108,14 @@ class ElasticRequestLogFilter implements Filter {
 
         // TODO: get response size, only way to wrap the response with wrappers for Writer and OutputStream to count size? messy, slow...
         // bytes:0,
+        // final time after streaming response (ie flush response)
+        long finalTime = System.currentTimeMillis() - startTime
 
-        Map reqMap = ['@timestamp':System.currentTimeMillis(), remote_ip:clientIpAddress, remote_user:request.getRemoteUser(),
+        Map reqMap = ['@timestamp':startTime, remote_ip:clientIpAddress, remote_user:request.getRemoteUser(),
                 server_ip:request.getLocalAddr(),
                 request_method:request.getMethod(), request_scheme:request.getScheme(), request_host:request.getServerName(),
                 request_path:request.getRequestURI(), request_query:request.getQueryString(),
-                http_version:httpVersion, response:response.getStatus(),
+                http_version:httpVersion, response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime,
                 referrer:request.getHeader("Referrer"), agent:request.getHeader("User-Agent")]
         requestLogQueue.add(reqMap)
     }
