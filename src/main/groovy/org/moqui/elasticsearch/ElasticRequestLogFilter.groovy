@@ -31,8 +31,7 @@ import javax.servlet.http.HttpServletResponse
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 
-/** Check authentication and permission for servlets other than MoquiServlet, MoquiFopServlet.
- * Specify permission to check in 'permission' init-param. */
+/** Save data about HTTP requests to ElasticSearch using a Servlet Filter */
 @CompileStatic
 class ElasticRequestLogFilter implements Filter {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticRequestLogFilter.class)
@@ -75,29 +74,40 @@ class ElasticRequestLogFilter implements Filter {
     // TODO: add geoip (see https://www.elastic.co/guide/en/logstash/current/plugins-filters-geoip.html)
     // TODO: add user_agent (see https://www.elastic.co/guide/en/logstash/current/plugins-filters-useragent.html)
 
-    final static Map docMapping = [properties:
-        ['@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'], server_ip:[type:'ip'],
+    final static Map docMapping = [properties:[
+            '@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'], server_ip:[type:'ip'],
             request_method:[type:'keyword'], request_scheme:[type:'keyword'], request_host:[type:'keyword'],
-            request_path:[type:'text'], request_query:[type:'text'], http_version:[type:'half_float'],
-            response:[type:'short'], time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'], referrer:[type:'text'], agent:[type:'text']
+            request_path:[type:'text'], request_query:[type:'text'], http_version:[type:'half_float'], response:[type:'short'],
+            time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'], referrer:[type:'text'], agent:[type:'text']
         ]
     ]
 
     @Override
     void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
         long startTime = System.currentTimeMillis()
-        // chain first so response is run
-        chain.doFilter(req, resp)
 
-        if (elasticSearchClient == null || disabled) return
-
-        if (!(req instanceof HttpServletRequest) || !(resp instanceof HttpServletResponse)) return
+        if (!(req instanceof HttpServletRequest) || !(resp instanceof HttpServletResponse)) { chain.doFilter(req, resp); return }
         HttpServletRequest request = (HttpServletRequest) req
         HttpServletResponse response = (HttpServletResponse) resp
 
+        CountingHttpServletResponseWrapper responseWrapper = (CountingHttpServletResponseWrapper) null
+        try {
+            responseWrapper = new CountingHttpServletResponseWrapper(response)
+        } catch (Exception e) {
+            logger.warn("Error initializing CountingHttpServletResponseWrapper", e)
+        }
+        // chain first so response is run
+        if (responseWrapper != null) {
+            chain.doFilter(req, responseWrapper)
+        } else {
+            chain.doFilter(req, resp)
+        }
+
+        if (elasticSearchClient == null || disabled) return
+
         long initialTime = System.currentTimeMillis() - startTime
 
-                String clientIpAddress = request.getRemoteAddr()
+        String clientIpAddress = request.getRemoteAddr()
         String forwardedFor = request.getHeader("X-Forwarded-For")
         if (forwardedFor != null && !forwardedFor.isEmpty()) clientIpAddress = forwardedFor.split(",")[0].trim()
 
@@ -106,16 +116,17 @@ class ElasticRequestLogFilter implements Filter {
         int psIdx = protocol.indexOf("/")
         if (psIdx > 0) try { httpVersion = Float.parseFloat(protocol.substring(psIdx + 1)) } catch (Exception e) { }
 
-        // TODO: get response size, only way to wrap the response with wrappers for Writer and OutputStream to count size? messy, slow...
-        // bytes:0,
+        // get response size, only way to wrap the response with wrappers for Writer and OutputStream to count size? messy, slow...
+        if (responseWrapper != null) responseWrapper.flushBuffer() else response.flushBuffer()
+        long written = responseWrapper != null ? responseWrapper.getWritten() : 0L
         // final time after streaming response (ie flush response)
         long finalTime = System.currentTimeMillis() - startTime
 
         Map reqMap = ['@timestamp':startTime, remote_ip:clientIpAddress, remote_user:request.getRemoteUser(),
                 server_ip:request.getLocalAddr(),
                 request_method:request.getMethod(), request_scheme:request.getScheme(), request_host:request.getServerName(),
-                request_path:request.getRequestURI(), request_query:request.getQueryString(),
-                http_version:httpVersion, response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime,
+                request_path:request.getRequestURI(), request_query:request.getQueryString(), http_version:httpVersion,
+                response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime, bytes:written,
                 referrer:request.getHeader("Referrer"), agent:request.getHeader("User-Agent")]
         requestLogQueue.add(reqMap)
     }
@@ -130,9 +141,7 @@ class ElasticRequestLogFilter implements Filter {
         RequestLogQueueFlush(ElasticRequestLogFilter filter) { this.filter = filter }
 
         @Override synchronized void run() {
-            while (filter.requestLogQueue.size() > 0) {
-                flushQueue()
-            }
+            while (filter.requestLogQueue.size() > 0) { flushQueue() }
         }
         void flushQueue() {
             final ConcurrentLinkedQueue<Map> queue = filter.requestLogQueue
