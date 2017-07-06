@@ -86,10 +86,14 @@ class ElasticRequestLogFilter implements Filter {
     void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
         long startTime = System.currentTimeMillis()
 
-        if (!(req instanceof HttpServletRequest) || !(resp instanceof HttpServletResponse)) { chain.doFilter(req, resp); return }
+        if (elasticSearchClient == null || disabled || !DispatcherType.REQUEST.is(req.getDispatcherType()) ||
+                !(req instanceof HttpServletRequest) || !(resp instanceof HttpServletResponse)) {
+            chain.doFilter(req, resp)
+            return
+        }
+
         HttpServletRequest request = (HttpServletRequest) req
         HttpServletResponse response = (HttpServletResponse) resp
-
         CountingHttpServletResponseWrapper responseWrapper = (CountingHttpServletResponseWrapper) null
         try {
             responseWrapper = new CountingHttpServletResponseWrapper(response)
@@ -103,9 +107,17 @@ class ElasticRequestLogFilter implements Filter {
             chain.doFilter(req, resp)
         }
 
-        if (elasticSearchClient == null || disabled) return
+        if (request.isAsyncStarted()) {
+            request.getAsyncContext().addListener(new RequestLogAsyncListener(this, startTime), req, responseWrapper != null ? responseWrapper : response)
+        } else {
+            logRequest(request, responseWrapper != null ? responseWrapper : response, startTime)
+        }
+    }
 
+    void logRequest(HttpServletRequest request, HttpServletResponse response, long startTime) {
         long initialTime = System.currentTimeMillis() - startTime
+        // always flush the buffer so we can get the final time; this is for some reason NECESSARY for the wrapper otherwise content doesn't make it through
+        response.flushBuffer()
 
         String clientIpAddress = request.getRemoteAddr()
         String forwardedFor = request.getHeader("X-Forwarded-For")
@@ -117,8 +129,9 @@ class ElasticRequestLogFilter implements Filter {
         if (psIdx > 0) try { httpVersion = Float.parseFloat(protocol.substring(psIdx + 1)) } catch (Exception e) { }
 
         // get response size, only way to wrap the response with wrappers for Writer and OutputStream to count size? messy, slow...
-        if (responseWrapper != null) responseWrapper.flushBuffer() else response.flushBuffer()
-        long written = responseWrapper != null ? responseWrapper.getWritten() : 0L
+        long written = 0L
+        if (response instanceof CountingHttpServletResponseWrapper) written = ((CountingHttpServletResponseWrapper) response).getWritten()
+
         // final time after streaming response (ie flush response)
         long finalTime = System.currentTimeMillis() - startTime
 
@@ -129,10 +142,10 @@ class ElasticRequestLogFilter implements Filter {
                 response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime, bytes:written,
                 referrer:request.getHeader("Referrer"), agent:request.getHeader("User-Agent")]
         requestLogQueue.add(reqMap)
+        // logger.info("${request.getMethod()} ${request.getRequestURI()} - ${response.getStatus()} ${finalTime}ms ${written}b asyncs ${request.isAsyncStarted()}")
     }
 
-    @Override
-    void destroy() {  }
+    @Override void destroy() { }
 
     static class RequestLogQueueFlush implements Runnable {
         final static int maxCreates = 50
@@ -189,6 +202,23 @@ class ElasticRequestLogFilter implements Filter {
                     logger.error("Error indexing ElasticSearch log messages, retrying (${retryCount}): ${t.toString()}")
                     retryCount--
                 }
+            }
+        }
+    }
+
+    static class RequestLogAsyncListener implements AsyncListener {
+        ElasticRequestLogFilter filter
+        private long startTime
+        RequestLogAsyncListener(ElasticRequestLogFilter filter, long startTime) { this.filter = filter; this.startTime = startTime }
+
+        @Override void onComplete(AsyncEvent event) throws IOException { logEvent(event) }
+        @Override void onTimeout(AsyncEvent event) throws IOException { logEvent(event) }
+        @Override void onError(AsyncEvent event) throws IOException { logEvent(event) }
+        @Override void onStartAsync(AsyncEvent event) throws IOException { }
+
+        void logEvent(AsyncEvent event) {
+            if (event.getSuppliedRequest() instanceof HttpServletRequest && event.getSuppliedResponse() instanceof HttpServletResponse) {
+                filter.logRequest((HttpServletRequest) event.getSuppliedRequest(), (HttpServletResponse) event.getSuppliedResponse(), startTime)
             }
         }
     }

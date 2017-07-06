@@ -43,8 +43,7 @@ public class CountingHttpServletResponseWrapper extends HttpServletResponseWrapp
         return this.writer;
     }
 
-    @Override
-    public void flushBuffer() throws IOException {
+    @Override public void flushBuffer() throws IOException {
         if (writer != null) writer.flush();
         else if (outputStream != null) outputStream.flush();
         super.flushBuffer();
