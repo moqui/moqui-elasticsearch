@@ -75,10 +75,12 @@ class ElasticRequestLogFilter implements Filter {
     // TODO: add user_agent (see https://www.elastic.co/guide/en/logstash/current/plugins-filters-useragent.html)
 
     final static Map docMapping = [properties:[
-            '@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'], server_ip:[type:'ip'],
+            '@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'],
+            server_ip:[type:'ip'], content_type:[type:'text'],
             request_method:[type:'keyword'], request_scheme:[type:'keyword'], request_host:[type:'keyword'],
             request_path:[type:'text'], request_query:[type:'text'], http_version:[type:'half_float'], response:[type:'short'],
-            time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'], referrer:[type:'text'], agent:[type:'text']
+            time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'],
+            referrer:[type:'text'], agent:[type:'text']
         ]
     ]
 
@@ -136,7 +138,7 @@ class ElasticRequestLogFilter implements Filter {
         long finalTime = System.currentTimeMillis() - startTime
 
         Map reqMap = ['@timestamp':startTime, remote_ip:clientIpAddress, remote_user:request.getRemoteUser(),
-                server_ip:request.getLocalAddr(),
+                server_ip:request.getLocalAddr(), content_type:response.getContentType(),
                 request_method:request.getMethod(), request_scheme:request.getScheme(), request_host:request.getServerName(),
                 request_path:request.getRequestURI(), request_query:request.getQueryString(), http_version:httpVersion,
                 response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime, bytes:written,
