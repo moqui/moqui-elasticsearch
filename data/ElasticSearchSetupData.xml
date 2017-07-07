@@ -34,4 +34,11 @@ along with this software (see the LICENSE.md file). If not, see
         <parameters parameterName="timestampField" parameterValue="@timestamp"/>
         <parameters parameterName="daysToKeep" parameterValue="30"/>
     </moqui.service.job.ServiceJob>
+    <moqui.service.job.ServiceJob jobName="clean_ElasticSearchHttpLogMessages_daily" description="Clean http request log messages stored in ElasticSearch"
+            serviceName="org.moqui.search.ElasticSearchServices.delete#Documents" cronExpression="0 0 2 * * ?" paused="Y">
+        <parameters parameterName="indexName" parameterValue="moqui_http_log"/>
+        <parameters parameterName="documentType" parameterValue="MoquiHttpRequest"/>
+        <parameters parameterName="timestampField" parameterValue="@timestamp"/>
+        <parameters parameterName="daysToKeep" parameterValue="90"/>
+    </moqui.service.job.ServiceJob>
 </entity-facade-xml>
