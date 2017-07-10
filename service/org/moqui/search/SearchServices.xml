@@ -49,6 +49,8 @@ along with this software (see the LICENSE.md file). If not, see
             if (verifyIndexes) {
                 Set indexNames = new HashSet(documentList*._index)
                 for (String indexName in indexNames) ElasticSearchUtil.checkCreateIndex(indexName, ec)
+                Set dataDocumentIds = new HashSet(documentList*._type)
+                for (String dataDocumentId in dataDocumentIds) ElasticSearchUtil.checkCreateDocIndex(dataDocumentId, ec)
             }
 
             documentVersionList = []

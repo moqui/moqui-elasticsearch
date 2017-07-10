@@ -63,7 +63,18 @@ class ElasticSearchUtil {
         for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd, client, eci)
     }
 
-    static void storeIndexAndMapping(String indexName, EntityValue dd, Client client, ExecutionContextImpl eci) {
+    // NOTE: called in service scripts
+    static synchronized void checkCreateDocIndex(String dataDocumentId, ExecutionContextImpl eci) {
+        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
+
+        String idxName = ddIdToEsIndex(dataDocumentId)
+        if (client.admin().indices().prepareExists(idxName).get().exists) return
+
+        EntityValue dd = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("dataDocumentId", dataDocumentId).one()
+        storeIndexAndMapping((String) dd.indexName, dd, client, eci)
+    }
+
+    protected static void storeIndexAndMapping(String indexName, EntityValue dd, Client client, ExecutionContextImpl eci) {
         String dataDocumentId = (String) dd.getNoCheckSimple("dataDocumentId")
         String esIndexName = ddIdToEsIndex(dataDocumentId)
         boolean hasIndex = client.admin().indices().prepareExists(esIndexName).get().exists
