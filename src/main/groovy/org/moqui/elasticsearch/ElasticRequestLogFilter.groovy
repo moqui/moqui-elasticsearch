@@ -138,7 +138,7 @@ class ElasticRequestLogFilter implements Filter {
         long finalTime = System.currentTimeMillis() - startTime
 
         Map reqMap = ['@timestamp':startTime, remote_ip:clientIpAddress, remote_user:request.getRemoteUser(),
-                server_ip:request.getLocalAddr(), content_type:response.getContentType(),
+                server_ip:request.getLocalAddr()?:request.getServerName(), content_type:response.getContentType(),
                 request_method:request.getMethod(), request_scheme:request.getScheme(), request_host:request.getServerName(),
                 request_path:request.getRequestURI(), request_query:request.getQueryString(), http_version:httpVersion,
                 response:response.getStatus(), time_initial_ms:initialTime, time_final_ms:finalTime, bytes:written,
