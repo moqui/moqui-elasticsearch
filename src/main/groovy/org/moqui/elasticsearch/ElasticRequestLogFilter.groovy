@@ -76,7 +76,7 @@ class ElasticRequestLogFilter implements Filter {
 
     final static Map docMapping = [properties:[
             '@timestamp':[type:'date', format:'epoch_millis'], remote_ip:[type:'ip'], remote_user:[type:'keyword'],
-            server_ip:[type:'ip'], content_type:[type:'text'],
+            server_ip:[type:'text'], content_type:[type:'text'],
             request_method:[type:'keyword'], request_scheme:[type:'keyword'], request_host:[type:'keyword'],
             request_path:[type:'text'], request_query:[type:'text'], http_version:[type:'half_float'], response:[type:'short'],
             time_initial_ms:[type:'integer'], time_final_ms:[type:'integer'], bytes:[type:'long'],
