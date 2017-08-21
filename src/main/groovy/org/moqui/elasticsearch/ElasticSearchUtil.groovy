@@ -13,7 +13,6 @@
  */
 package org.moqui.elasticsearch
 
-import groovy.json.JsonBuilder
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
 import org.elasticsearch.action.search.SearchRequestBuilder
@@ -211,9 +210,7 @@ class ElasticSearchUtil {
 
     static SearchResponse aggregationSearch(String indexName, List<String> documentTypeList, Integer maxResults, Map queryMap,
                                             AggregationBuilder aggBuilder, ExecutionContextImpl eci) {
-        JsonBuilder jb = new JsonBuilder()
-        jb.call((Map) queryMap)
-        String queryJson = jb.toString()
+        String queryJson = queryMap != null ? JsonOutput.toJson(queryMap) : null
         // logger.warn("aggregationSearch queryJson: ${JsonOutput.prettyPrint(queryJson)}")
 
         Client elasticSearchClient = (Client) eci.getTool("ElasticSearch", Client.class)
@@ -221,9 +218,10 @@ class ElasticSearchUtil {
         checkCreateIndex(indexName, eci)
 
         // get the search hits
-        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setSize(maxResults)
+        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
+        if (maxResults != null) srb.setSize(maxResults)
         if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
-        srb.setQuery(QueryBuilders.wrapperQuery(queryJson))
+        if (queryJson) srb.setQuery(QueryBuilders.wrapperQuery(queryJson))
         srb.addAggregation(aggBuilder)
         // logger.warn("aggregationSearch srb: ${srb.toString()}")
 
@@ -233,7 +231,7 @@ class ElasticSearchUtil {
             // responseString = searchResponse.toString()
             return searchResponse
         } catch (Exception e) {
-            logger.error("Error in search: ${e.toString()}\nQuery JSON:\n${JsonOutput.prettyPrint(queryJson)}")
+            logger.error("Error in search: ${e.toString()}\nQuery JSON:\n${queryJson ? JsonOutput.prettyPrint(queryJson) : ''}")
             throw e
         }
     }
