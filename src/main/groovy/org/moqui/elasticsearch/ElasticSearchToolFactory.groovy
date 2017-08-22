@@ -79,6 +79,13 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         settings.put("path.data", pathData)
         settings.put("path.logs", pathLogs)
 
+        // arbitrary elasticsearch config, always starts with `es_config.`, e.g `es_config.node.name` will set `node.name` in setting
+        for (String envName in System.getenv().keySet()) {
+            if (!envName.startsWith("es_config.")) continue
+            String esConfigName = envName.substring(10)
+            if (esConfigName) settings.put(esConfigName, System.getenv(envName))
+        }
+
         elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
         elasticSearchNode.start()
         elasticSearchClient = elasticSearchNode.client()
