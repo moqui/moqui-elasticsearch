@@ -80,6 +80,12 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         settings.put("path.logs", pathLogs)
 
         // arbitrary elasticsearch config, always starts with `es_config.`, e.g `es_config.node.name` will set `node.name` in setting
+        for (String propName in System.getProperties().stringPropertyNames()) {
+            if (!propName.startsWith("es_config.") || !System.getProperty(propName)) continue
+            String esConfigName = propName.substring(10)
+            if (esConfigName) settings.put(esConfigName, System.getProperty(propName))
+        }
+        // do env vars after Java system properties so they override
         for (String envName in System.getenv().keySet()) {
             if (!envName.startsWith("es_config.")) continue
             String esConfigName = envName.substring(10)
