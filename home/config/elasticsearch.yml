@@ -109,6 +109,7 @@ http.port: 9200
 
 # ---------------------------------- Script ------------------------------------
 
+# see: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-security.html
 # allow all, don't specify:
 # script.allowed_types: inline
 # script.allowed_contexts: search, aggs
