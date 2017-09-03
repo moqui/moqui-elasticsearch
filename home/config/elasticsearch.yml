@@ -68,7 +68,7 @@ discovery.type: single-node
 # http.cors.allow-origin: '*'
 http.enabled: true
 
-# Set a custom port for HTTP:
+# Set a port for HTTP (9200 is the default, or with no port specified looks at subsequent ports to find one open):
 http.port: 9200
 
 # For more information, see the documentation at:
@@ -109,24 +109,9 @@ http.port: 9200
 
 # ---------------------------------- Script ------------------------------------
 
-script.inline: true
-script.stored: true
-script.file: true
-
-script.engine.groovy.inline.aggs: true
-
-# script.engine.groovy.file.aggs: on
-# script.engine.groovy.file.ingest: on
-# script.engine.groovy.file.search: on
-# script.engine.groovy.file.update: on
-# script.engine.groovy.stored.aggs: on
-# script.engine.groovy.stored.ingest: off
-# script.engine.groovy.stored.search: off
-# script.engine.groovy.stored.update: off
-# script.engine.groovy.inline.aggs: on
-# script.engine.groovy.inline.ingest: off
-# script.engine.groovy.inline.search: off
-# script.engine.groovy.inline.update: off
+# allow all, don't specify:
+# script.allowed_types: inline
+# script.allowed_contexts: search, aggs
 
 # moqui-elasticsearch now uses bulk indexing for everything, so use a bigger queue
 # default is 50 for bulk queue, default is 200 for index queue

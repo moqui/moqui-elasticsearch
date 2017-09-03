@@ -254,7 +254,7 @@ class ElasticSearchUtil {
         SearchResponse searchResponse = aggregationSearch(indexName, documentTypeList, maxResults, queryMap, termAggBuilder, eci)
 
         Terms termSimpleAgg = (Terms) searchResponse.getAggregations().get("TermSimple")
-        for (Terms.Bucket bucket in termSimpleAgg.getBuckets()) {
+        for (Terms.Bucket bucket in (List<Terms.Bucket>) termSimpleAgg.getBuckets()) {
             for (int i = 0; i < sumAggSize; i++) {
                 String sumAggName = (String) sumAggNames.get(i)
                 Sum sumAgg = (Sum) bucket.getAggregations().get(sumAggName)
