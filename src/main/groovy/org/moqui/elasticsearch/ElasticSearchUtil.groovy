@@ -35,6 +35,8 @@ import org.moqui.util.CollectionUtilities
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.sql.Timestamp
+
 @CompileStatic
 class ElasticSearchUtil {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticSearchUtil.class)
@@ -203,9 +205,33 @@ class ElasticSearchUtil {
         Map<String, Object> propertyMap = new LinkedHashMap<>()
         propertyMap.put("type", mappingType)
         if ("Y".equals(sortable) && "text".equals(mappingType)) propertyMap.put("fields", [keyword: [type: "keyword"]])
-        if ("date".equals(mappingType)) propertyMap.format = "strict_date_optional_time||epoch_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
+        if ("date-time".equals(fieldType)) propertyMap.format = "date_time||epoch_millis||date_time_no_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
+        else if ("date".equals(fieldType)) propertyMap.format = "date||strict_date_optional_time||epoch_millis"
         // if (fieldType.startsWith("id")) propertyMap.index = 'not_analyzed'
         return propertyMap
+    }
+
+    static void convertTypesForEs(Map theMap) {
+        // initially just Timestamp to Long using Timestamp.getTime() to handle ES time zone issues with Timestamp objects
+        for (Map.Entry entry in theMap.entrySet()) {
+            Object valObj = entry.getValue()
+            if (valObj instanceof Timestamp) {
+                entry.setValue(((Timestamp) valObj).getTime())
+            } else if (valObj instanceof BigDecimal) {
+                entry.setValue(((BigDecimal) valObj).doubleValue())
+            } else if (valObj instanceof Map) {
+                convertTypesForEs((Map) valObj)
+            } else if (valObj instanceof Collection) {
+                for (Object colObj in ((Collection) valObj)) {
+                    if (colObj instanceof Map) {
+                        convertTypesForEs((Map) colObj)
+                    } else {
+                        // if first in list isn't a Map don't expect others to be
+                        break
+                    }
+                }
+            }
+        }
     }
 
     static SearchResponse aggregationSearch(String indexName, List<String> documentTypeList, Integer maxResults, Map queryMap,

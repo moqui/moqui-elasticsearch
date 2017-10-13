@@ -81,7 +81,7 @@ along with this software (see the LICENSE.md file). If not, see
                             originalDocument._type = gr.getType()
                             originalDocument._id = gr.getId()
                             originalDocument._version = gr.getVersion()
-                            originalDocumentList.add(originalDocument ?: [:])
+                            originalDocumentList.add(originalDocument)
                         } else {
                             originalDocumentList.add([:])
                         }
@@ -90,6 +90,10 @@ along with this software (see the LICENSE.md file). If not, see
                         originalDocumentList.add([:])
                     }
                 }
+
+                // before indexing convert types needed for ES
+                ElasticSearchUtil.convertTypesForEs(document)
+                // add the document to the bulk index
                 bulkBuilder.add(elasticSearchClient.prepareIndex(esIndexName, _type, _id).setSource(document))
                 // .setIndex(esIndexName).setType(_type).setId(_id)
                 curBulkDocs++
