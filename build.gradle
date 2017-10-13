@@ -53,6 +53,7 @@ dependencies {
     compile module('org.codelibs.elasticsearch.module:lang-groovy:5.6.2')
     compile 'org.codelibs.elasticsearch.module:transport-netty4:5.6.2'
     compile 'org.codelibs.elasticsearch.module:reindex:5.6.2'
+    compile 'org.codelibs.elasticsearch.module:parent-join:5.6.2'
 
     // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
     // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
