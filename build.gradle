@@ -41,18 +41,18 @@ dependencies {
     compile project(':framework')
 
     // ElasticSearch Libraries, including Lucene
-    compile 'org.elasticsearch:elasticsearch:5.6.2' // Apache 2.0
+    compile 'org.elasticsearch:elasticsearch:5.6.3' // Apache 2.0
     // ElasticSearch uses jackson-dataformat-smile, -yaml, -cbor pulling in jackson-core, also used by OrientDB, but gets an older version
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.1'
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.1'
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.1'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.2'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.2'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.2'
     // JNA, needed by ElasticSearch when running embedded, now included as a dependency: compile 'net.java.dev.jna:jna:4.5.0' // Apache 2.0
     // not currently needed/used: compile 'net.java.dev.jna:jna-platform:4.5.0' // Apache 2.0
 
     // modules: when updating these update the versions in the plugin-descriptor.properties files in home/modules/*
-    compile module('org.codelibs.elasticsearch.module:lang-groovy:5.6.2')
-    compile 'org.codelibs.elasticsearch.module:transport-netty4:5.6.2'
-    compile 'org.codelibs.elasticsearch.module:reindex:5.6.2'
+    compile module('org.codelibs.elasticsearch.module:lang-groovy:5.6.3')
+    compile 'org.codelibs.elasticsearch.module:transport-netty4:5.6.3'
+    compile 'org.codelibs.elasticsearch.module:reindex:5.6.3'
 
     // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
     // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
