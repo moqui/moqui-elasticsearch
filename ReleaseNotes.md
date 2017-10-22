@@ -1,7 +1,7 @@
 
 # Moqui ElasticSearch Release Notes
 
-## Release 1.1.0 - Not Yet Released
+## Release 1.1.0 - 22 Oct 2017
 
 Moqui ElasticSearch 1.1.0 is a minor new feature and bug fix release.
 
