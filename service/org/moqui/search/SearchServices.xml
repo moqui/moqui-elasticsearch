@@ -321,10 +321,7 @@ along with this software (see the LICENSE.md file). If not, see
             }
 
             // get the total search count
-            SearchRequestBuilder countSrb = elasticSearchClient.prepareSearch().setIndices(indexName)
-                    .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setSize(0)
-            if (documentType) countSrb.setTypes(((String) documentType).split(","))
-            documentListCount = countSrb.execute().actionGet().getHits().getTotalHits()
+            documentListCount = hits.getTotalHits()
 
             // calculate the pagination values
             documentListPageIndex = pageIndex
