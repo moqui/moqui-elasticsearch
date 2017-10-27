@@ -239,6 +239,7 @@ along with this software (see the LICENSE.md file). If not, see
                 this is the dataDocumentId.</description></parameter>
             <parameter name="queryString" required="true"/>
             <parameter name="orderByFields" type="List"><parameter name="orderByField"/></parameter>
+            <parameter name="highlightFields" type="List"><parameter name="highlightField"/></parameter>
             <parameter name="pageIndex" type="Integer" default="0"/>
             <parameter name="pageSize" type="Integer" default="20"/>
             <parameter name="flattenDocument" type="Boolean" default="true"/>
@@ -266,6 +267,8 @@ along with this software (see the LICENSE.md file). If not, see
             import org.elasticsearch.index.query.QueryBuilders
             import org.elasticsearch.search.SearchHit
             import org.elasticsearch.search.SearchHits
+            import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder
+            import org.elasticsearch.search.fetch.subphase.highlight.HighlightField
             import org.elasticsearch.search.sort.SortOrder
             import org.moqui.context.ExecutionContext
             import org.moqui.elasticsearch.ElasticSearchUtil
@@ -277,6 +280,7 @@ along with this software (see the LICENSE.md file). If not, see
             sizeLimit = pageSize
 
             documentList = []
+            boolean hasHighlights = highlightFields != null && highlightFields.size() > 0
 
             // make sure index exists
             if (!ElasticSearchUtil.checkIndexExists(indexName, ec)) {
@@ -291,9 +295,14 @@ along with this software (see the LICENSE.md file). If not, see
             }
 
             // get the search hits
-            SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
-                    .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setFrom(fromOffset).setSize(sizeLimit)
+            SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setFrom(fromOffset).setSize(sizeLimit)
+                    .setQuery(QueryBuilders.queryStringQuery((String) queryString).lenient(true).timeZone(TimeZone.default.getID()))
                     .setFetchSource(true)
+            if (hasHighlights) {
+                HighlightBuilder hb = new HighlightBuilder()
+                for (String hlField in highlightFields) hb.field(hlField)
+                srb.highlighter(hb)
+            }
             if (documentType) srb.setTypes(((String) documentType).split(","))
             for (String orderByField in orderByFields) {
                 boolean ascending = true
@@ -311,13 +320,25 @@ along with this software (see the LICENSE.md file). If not, see
             SearchHits hits = srb.execute().actionGet().getHits()
             for (SearchHit hit in hits) {
                 Map document = hit.getSource()
+                if (flattenDocument) document = flattenNestedMap(document)
+
                 // As of ES 2.0 _index, _type, _id aren't included in the document
                 document._index = hit.getIndex()
                 document._type = hit.getType()
                 document._id = hit.getId()
                 // how to get timestamp? doesn't seem to be in API: document._timestamp = hit.get?
                 document._version = hit.getVersion()
-                documentList.add(flattenDocument ? flattenNestedMap(document) : document)
+
+                if (hasHighlights) {
+                    Map<String, HighlightField> highlightFields = hit.getHighlightFields()
+                    Map highlights = [:]
+                    for (Map.Entry<String, HighlightField> hlEntry in highlightFields.entrySet())
+                        highlights.put(hlEntry.key, Arrays.asList(hlEntry.value.getFragments()))
+                    document.put("highlights", highlights)
+                    // ec.logger.warn("Highlight Fields: " + highlights)
+                }
+
+                documentList.add(document)
             }
 
             // get the total search count
