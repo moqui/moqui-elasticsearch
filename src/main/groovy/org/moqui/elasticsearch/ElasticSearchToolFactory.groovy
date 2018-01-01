@@ -18,6 +18,9 @@ import org.elasticsearch.client.Client
 import org.elasticsearch.common.settings.Settings
 import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.ToolFactory
+import org.moqui.entity.EntityList
+import org.moqui.entity.EntityValue
+import org.moqui.impl.context.ExecutionContextImpl
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -95,6 +98,21 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
         elasticSearchNode.start()
         elasticSearchClient = elasticSearchNode.client()
+
+        // Index DataFeed with indexOnStartEmpty=Y
+        EntityList dataFeedList = ecf.entity.find("moqui.entity.feed.DataFeed")
+                .condition("indexOnStartEmpty", "Y").disableAuthz().list()
+        for (EntityValue dataFeed in dataFeedList) {
+            Set<String> indexNames = new HashSet<>(ecf.entity.find("moqui.entity.feed.DataFeedDocumentDetail")
+                    .condition("dataFeedId", dataFeed.dataFeedId).disableAuthz().list()*.getString("indexName"))
+            boolean foundNotExists = false
+            for (String indexName in indexNames)
+                if (!ElasticSearchUtil.checkIndexExists(indexName, (ExecutionContextImpl) ecf.getExecutionContext())) foundNotExists = true
+            if (foundNotExists) {
+                String jobRunId = ecf.service.job("IndexDataFeedDocuments").parameter("dataFeedId", dataFeed.dataFeedId).run()
+                logger.info("Found index does not exist for DataFeed ${dataFeed.dataFeedId}, started job ${jobRunId} to index")
+            }
+        }
     }
     @Override
     void preFacadeInit(ExecutionContextFactory ecf) { }
