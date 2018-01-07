@@ -40,4 +40,13 @@
             </servlet>
         </webapp>
     </webapp-list>
+    <screen-facade>
+        <screen location="component://webroot/screen/webroot.xml">
+            <subscreens-item name="elastichq" menu-include="false" location="component://moqui-elasticsearch/screen/elastichq.xml"/>
+        </screen>
+        <screen location="component://tools/screen/System.xml">
+            <subscreens-item name="LogViewer" menu-title="Log Viewer" menu-index="20"
+                    location="component://moqui-elasticsearch/screen/System/LogViewer.xml"/>
+        </screen>
+    </screen-facade>
 </moqui-conf>
