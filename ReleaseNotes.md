@@ -1,6 +1,13 @@
 
 # Moqui ElasticSearch Release Notes
 
+## Release 1.1.1 - Not Yet Released
+
+Moqui ElasticSearch 1.1.1 is a minor new feature and bug fix release.
+
+On startup if a DataFeed has indexOnStartEmpty=Y and ES indexes for the feed do not exist the full feed will be indexed so that 
+indexes are populated based on relational database data for expected system operation.
+
 ## Release 1.1.0 - 22 Oct 2017
 
 Moqui ElasticSearch 1.1.0 is a minor new feature and bug fix release.
