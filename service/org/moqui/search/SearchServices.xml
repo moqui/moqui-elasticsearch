@@ -321,7 +321,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             SearchHits hits = srb.execute().actionGet().getHits()
             for (SearchHit hit in hits) {
-                Map document = hit.getSource()
+                Map document = hit.getSourceAsMap()
                 if (flattenDocument) document = flattenNestedMap(document)
 
                 // As of ES 2.0 _index, _type, _id aren't included in the document
