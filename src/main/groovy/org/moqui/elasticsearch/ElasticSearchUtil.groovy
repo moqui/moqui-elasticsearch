@@ -182,6 +182,8 @@ class ElasticSearchUtil {
                 entry.setValue(((Timestamp) valObj).getTime())
             } else if (valObj instanceof BigDecimal) {
                 entry.setValue(((BigDecimal) valObj).doubleValue())
+            } else if (valObj instanceof GString) {
+                entry.setValue(valObj.toString())
             } else if (valObj instanceof Map) {
                 convertTypesForEs((Map) valObj)
             } else if (valObj instanceof Collection) {
