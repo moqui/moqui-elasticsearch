@@ -20,14 +20,14 @@ import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.ToolFactory
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
-import org.moqui.impl.context.ExecutionContextImpl
+import org.moqui.impl.context.ExecutionContextFactoryImpl
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /** ElasticSearch Client is used for indexing and searching documents */
 /** NOTE: embedded ElasticSearch may soon go away, see: https://www.elastic.co/blog/elasticsearch-the-server */
 @CompileStatic
-class ElasticSearchToolFactory implements ToolFactory<Client> {
+class ElasticSearchToolFactory implements ToolFactory<EsClient> {
     protected final static Logger logger = LoggerFactory.getLogger(ElasticSearchToolFactory.class)
     final static String TOOL_NAME = "ElasticSearch"
 
@@ -37,6 +37,8 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
     protected org.elasticsearch.node.Node elasticSearchNode
     /** ElasticSearch Client */
     protected Client elasticSearchClient
+    /** ES Client Wrapper */
+    protected EsClientJava esClient
 
     /** Default empty constructor */
     ElasticSearchToolFactory() { }
@@ -98,6 +100,7 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
         elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
         elasticSearchNode.start()
         elasticSearchClient = elasticSearchNode.client()
+        esClient = new EsClientJava(elasticSearchClient, (ExecutionContextFactoryImpl) ecf)
 
         // Index DataFeed with indexOnStartEmpty=Y
         EntityList dataFeedList = ecf.entity.find("moqui.entity.feed.DataFeed")
@@ -106,8 +109,7 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
             Set<String> indexNames = new HashSet<>(ecf.entity.find("moqui.entity.feed.DataFeedDocumentDetail")
                     .condition("dataFeedId", dataFeed.dataFeedId).disableAuthz().list()*.getString("indexName"))
             boolean foundNotExists = false
-            for (String indexName in indexNames)
-                if (!ElasticSearchUtil.checkIndexExists(indexName, (ExecutionContextImpl) ecf.getExecutionContext())) foundNotExists = true
+            for (String indexName in indexNames) if (!esClient.checkIndexExists(indexName)) foundNotExists = true
             if (foundNotExists) {
                 String jobRunId = ecf.service.job("IndexDataFeedDocuments").parameter("dataFeedId", dataFeed.dataFeedId).run()
                 logger.info("Found index does not exist for DataFeed ${dataFeed.dataFeedId}, started job ${jobRunId} to index")
@@ -118,9 +120,9 @@ class ElasticSearchToolFactory implements ToolFactory<Client> {
     void preFacadeInit(ExecutionContextFactory ecf) { }
 
     @Override
-    Client getInstance(Object... parameters) {
-        if (elasticSearchClient == null) throw new IllegalStateException("ElasticSearchToolFactory not initialized")
-        return elasticSearchClient
+    EsClient getInstance(Object... parameters) {
+        if (esClient == null) throw new IllegalStateException("ElasticSearchToolFactory not initialized")
+        return esClient
     }
 
     @Override

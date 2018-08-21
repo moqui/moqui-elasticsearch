@@ -27,11 +27,12 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions><script><![CDATA[
             import org.elasticsearch.action.search.SearchRequestBuilder
-            import org.elasticsearch.client.Client
+            import org.elasticsearch.index.query.QueryBuilder
             import org.elasticsearch.index.query.QueryBuilders
             import org.elasticsearch.index.reindex.DeleteByQueryAction
-            import org.elasticsearch.index.reindex.DeleteByQueryRequestBuilder
+            import org.elasticsearch.index.reindex.DeleteByQueryRequest
             import org.moqui.context.ExecutionContext
+            import org.moqui.elasticsearch.EsClient
 
             ExecutionContext ec = context.ec
 
@@ -41,7 +42,7 @@ along with this software (see the LICENSE.md file). If not, see
                 return
             }
 
-            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
+            EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
 
             Long thruMillis = null
             if (daysToKeep != null) {
@@ -50,22 +51,20 @@ along with this software (see the LICENSE.md file). If not, see
                 thruMillis = basisCal.getTimeInMillis()
             }
 
-            DeleteByQueryRequestBuilder req = new DeleteByQueryRequestBuilder(elasticSearchClient, DeleteByQueryAction.INSTANCE)
-            SearchRequestBuilder srb = req.source().setIndices(indexName)
-            if (documentType) srb.setTypes(documentType)
+            QueryBuilder filter = null
             if (queryString && thruMillis) {
-                srb.setQuery(QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery((String) queryString))
-                        .must(QueryBuilders.rangeQuery(timestampField).lte(thruMillis)))
+                filter = QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery((String) queryString))
+                        .must(QueryBuilders.rangeQuery(timestampField).lte(thruMillis))
             } else if (queryString) {
-                srb.setQuery(QueryBuilders.queryStringQuery((String) queryString))
+                filter = QueryBuilders.queryStringQuery((String) queryString)
             } else if (thruMillis) {
-                srb.setQuery(QueryBuilders.rangeQuery(timestampField).lte(thruMillis))
+                filter = QueryBuilders.rangeQuery(timestampField).lte(thruMillis)
             } else {
                 ec.message.addError("To delete documents must specify daysToKeep, queryString, or both")
                 return
             }
 
-            deletedCount = req.get().getDeleted()
+            deletedCount = esClient.deleteByQuery((String) indexName, (String) documentType, filter)
 
             String resultMsg = "Deleted ${deletedCount} type ${documentType} documents from index ${indexName} with days to keep ${daysToKeep} and query ${queryString}".toString()
             ec.logger.info(resultMsg)

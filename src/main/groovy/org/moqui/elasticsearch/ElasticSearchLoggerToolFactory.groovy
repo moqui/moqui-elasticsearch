@@ -17,11 +17,9 @@ import groovy.transform.CompileStatic
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.core.LogEvent
 import org.apache.logging.log4j.util.ReadOnlyStringMap
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
-import org.elasticsearch.action.bulk.BulkRequestBuilder
+import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.bulk.BulkResponse
-import org.elasticsearch.client.Client
+import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.transport.TransportException
 import org.moqui.BaseArtifactException
 import org.moqui.context.ArtifactExecutionInfo
@@ -43,7 +41,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
     protected ExecutionContextFactoryImpl ecfi = null
     protected ElasticSearchSubscriber subscriber = null
 
-    private Client elasticSearchClient = null
+    private EsClient esClient = null
     private boolean disabled = false
     final ConcurrentLinkedQueue<Map> logMessageQueue = new ConcurrentLinkedQueue<>()
 
@@ -54,17 +52,13 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
     @Override void init(ExecutionContextFactory ecf) {
         ecfi = (ExecutionContextFactoryImpl) ecf
 
-        elasticSearchClient = ecfi.getTool("ElasticSearch", Client.class)
-        if (elasticSearchClient == null) {
+        esClient = ecfi.getTool("ElasticSearch", EsClient.class)
+        if (esClient == null) {
             System.err.println("In ElasticSearchLogger init could not find ElasticSearch tool")
         } else {
             // check for index exists, create with mapping for log doc if not
-            boolean hasIndex = elasticSearchClient.admin().indices().exists(new IndicesExistsRequest(INDEX_NAME)).actionGet().exists
-            if (!hasIndex) {
-                CreateIndexRequestBuilder cirb = elasticSearchClient.admin().indices().prepareCreate(INDEX_NAME)
-                cirb.addMapping(DOC_TYPE, docMapping)
-                cirb.execute().actionGet()
-            }
+            boolean hasIndex = esClient.checkIndexExists(INDEX_NAME)
+            if (!hasIndex) esClient.createIndex(INDEX_NAME, DOC_TYPE, docMapping)
 
             subscriber = new ElasticSearchSubscriber(this)
             ecfi.registerLogEventSubscriber(subscriber)
@@ -89,7 +83,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
         }
         @Override
         void process(LogEvent event) {
-            if (factory.disabled || factory.elasticSearchClient == null) return
+            if (factory.disabled || factory.esClient == null) return
             // NOTE: levels configurable in log4j2.xml but always exclude these
             if (Level.DEBUG.is(event.level) || Level.TRACE.is(event.level)) return
 
@@ -189,14 +183,14 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
                 try {
                     // long startTime = System.currentTimeMillis()
                     try {
-                        BulkRequestBuilder bulkBuilder = factory.elasticSearchClient.prepareBulk()
+                        BulkRequest bulkRequest = new BulkRequest()
+                        // BulkRequestBuilder bulkBuilder = factory.elasticSearchClient.prepareBulk()
                         for (int i = 0; i < createListSize; i++) {
                             Map curMessage = createList.get(i)
                             // System.out.println(curMessage.toString())
-                            bulkBuilder.add(factory.elasticSearchClient.prepareIndex(INDEX_NAME, DOC_TYPE, null)
-                                    .setSource(curMessage))
+                            bulkRequest.add(new IndexRequest(INDEX_NAME, DOC_TYPE, null).source(curMessage))
                         }
-                        BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                        BulkResponse bulkResponse = factory.esClient.bulk(bulkRequest)
                         if (bulkResponse.hasFailures()) {
                             System.out.println(bulkResponse.buildFailureMessage())
                         }

@@ -14,11 +14,9 @@
 package org.moqui.elasticsearch
 
 import groovy.transform.CompileStatic
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
-import org.elasticsearch.action.bulk.BulkRequestBuilder
+import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.bulk.BulkResponse
-import org.elasticsearch.client.Client
+import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.transport.TransportException
 import org.moqui.Moqui
 import org.moqui.impl.context.ExecutionContextFactoryImpl
@@ -41,7 +39,7 @@ class ElasticRequestLogFilter implements Filter {
     protected FilterConfig filterConfig = null
     protected ExecutionContextFactoryImpl ecfi = null
 
-    private Client elasticSearchClient = null
+    private EsClient esClient = null
     private boolean disabled = false
     final ConcurrentLinkedQueue<Map> requestLogQueue = new ConcurrentLinkedQueue<>()
 
@@ -54,17 +52,13 @@ class ElasticRequestLogFilter implements Filter {
         ecfi = (ExecutionContextFactoryImpl) filterConfig.servletContext.getAttribute("executionContextFactory")
         if (ecfi == null) ecfi = (ExecutionContextFactoryImpl) Moqui.executionContextFactory
 
-        elasticSearchClient = ecfi.getTool("ElasticSearch", Client.class)
-        if (elasticSearchClient == null) {
+        esClient = ecfi.getTool("ElasticSearch", EsClient.class)
+        if (esClient == null) {
             logger.error("In ElasticRequestLogFilter init could not find ElasticSearch tool")
         } else {
             // check for index exists, create with mapping for log doc if not
-            boolean hasIndex = elasticSearchClient.admin().indices().exists(new IndicesExistsRequest(INDEX_NAME)).actionGet().exists
-            if (!hasIndex) {
-                CreateIndexRequestBuilder cirb = elasticSearchClient.admin().indices().prepareCreate(INDEX_NAME)
-                cirb.addMapping(DOC_TYPE, docMapping)
-                cirb.execute().actionGet()
-            }
+            boolean hasIndex = esClient.checkIndexExists(INDEX_NAME)
+            if (!hasIndex) esClient.createIndex(INDEX_NAME, DOC_TYPE, docMapping)
 
             RequestLogQueueFlush rlqf = new RequestLogQueueFlush(this)
             ecfi.scheduledExecutor.scheduleAtFixedRate(rlqf, 15, 5, TimeUnit.SECONDS)
@@ -88,7 +82,7 @@ class ElasticRequestLogFilter implements Filter {
     void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
         long startTime = System.currentTimeMillis()
 
-        if (elasticSearchClient == null || disabled || !DispatcherType.REQUEST.is(req.getDispatcherType()) ||
+        if (esClient == null || disabled || !DispatcherType.REQUEST.is(req.getDispatcherType()) ||
                 !(req instanceof HttpServletRequest) || !(resp instanceof HttpServletResponse)) {
             chain.doFilter(req, resp)
             return
@@ -176,14 +170,13 @@ class ElasticRequestLogFilter implements Filter {
                 try {
                     // long startTime = System.currentTimeMillis()
                     try {
-                        BulkRequestBuilder bulkBuilder = filter.elasticSearchClient.prepareBulk()
+                        BulkRequest bulkRequest = new BulkRequest()
                         for (int i = 0; i < createListSize; i++) {
                             Map curMessage = createList.get(i)
                             // logger.warn(curMessage.toString())
-                            bulkBuilder.add(filter.elasticSearchClient.prepareIndex(INDEX_NAME, DOC_TYPE, null)
-                                    .setSource(curMessage))
+                            bulkRequest.add(new IndexRequest(INDEX_NAME, DOC_TYPE, null).source(curMessage))
                         }
-                        BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                        BulkResponse bulkResponse = filter.esClient.bulk(bulkRequest)
                         if (bulkResponse.hasFailures()) {
                             logger.error(bulkResponse.buildFailureMessage())
                         }

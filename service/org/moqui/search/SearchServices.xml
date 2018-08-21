@@ -30,32 +30,36 @@ along with this software (see the LICENSE.md file). If not, see
         <actions><script><![CDATA[
             import org.elasticsearch.action.bulk.BulkItemResponse
             import org.elasticsearch.action.bulk.BulkRequestBuilder
+            import org.elasticsearch.action.bulk.BulkRequest
             import org.elasticsearch.action.bulk.BulkResponse
-            import org.elasticsearch.client.Client
+            import org.elasticsearch.action.get.GetRequest
             import org.elasticsearch.action.get.GetResponse
+            import org.elasticsearch.action.index.IndexRequest
             import org.elasticsearch.action.index.IndexResponse
+
             import org.slf4j.Logger
             import org.slf4j.LoggerFactory
             import org.moqui.context.ExecutionContext
             import org.moqui.elasticsearch.ElasticSearchUtil
+            import org.moqui.elasticsearch.EsClient
 
             int docsPerBulk = 1000
 
             ExecutionContext ec = context.ec
-            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
+            EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
             Logger logger = LoggerFactory.getLogger("org.moqui.search.SearchServices.indexDataDocuments")
 
             // Make sure all indices exist
             if (verifyIndexes) {
                 Set indexNames = new HashSet(documentList*._index)
-                for (String indexName in indexNames) ElasticSearchUtil.checkCreateIndex(indexName, ec)
+                for (String indexName in indexNames) esClient.checkCreateIndex(indexName)
                 Set dataDocumentIds = new HashSet(documentList*._type)
-                for (String dataDocumentId in dataDocumentIds) ElasticSearchUtil.checkCreateDocIndex(dataDocumentId, ec)
+                for (String dataDocumentId in dataDocumentIds) esClient.checkCreateDocIndex(dataDocumentId)
             }
 
             documentVersionList = []
             originalDocumentList = getOriginalDocuments ? [] : null
-            BulkRequestBuilder bulkBuilder = elasticSearchClient.prepareBulk()
+            BulkRequest bulkRequest = new BulkRequest()
             int curBulkDocs = 0
             for (Map document in documentList) {
                 // logger.warn("====== Indexing document: ${document}")
@@ -75,7 +79,7 @@ along with this software (see the LICENSE.md file). If not, see
                 if (getOriginalDocuments) {
                     // this may fail for a number of reasons, like index doesn't exist yet, so catch the exception
                     try {
-                        GetResponse gr = elasticSearchClient.prepareGet(esIndexName, _type, _id).execute().actionGet()
+                        GetResponse gr = esClient.get(new GetRequest(esIndexName, _type, _id))
                         Map originalDocument = gr.getSourceAsMap()
                         if (originalDocument != null) {
                             // As of ES 2.0 _index, _type, _id aren't included in the document
@@ -96,12 +100,12 @@ along with this software (see the LICENSE.md file). If not, see
                 // before indexing convert types needed for ES
                 ElasticSearchUtil.convertTypesForEs(document)
                 // add the document to the bulk index
-                bulkBuilder.add(elasticSearchClient.prepareIndex(esIndexName, _type, _id).setSource(document))
+                bulkRequest.add(new IndexRequest(esIndexName, _type, _id).source(document))
                 // .setIndex(esIndexName).setType(_type).setId(_id)
                 curBulkDocs++
 
                 if (curBulkDocs >= docsPerBulk) {
-                    BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                    BulkResponse bulkResponse = esClient.bulk(bulkRequest)
                     if (bulkResponse.hasFailures()) {
                         ec.message.addError(bulkResponse.buildFailureMessage())
                         break
@@ -113,11 +117,11 @@ along with this software (see the LICENSE.md file). If not, see
 
                     // create a new bulk builder for the next set
                     curBulkDocs = 0
-                    bulkBuilder = elasticSearchClient.prepareBulk()
+                    bulkRequest = new BulkRequest()
                 }
             }
             if (curBulkDocs > 0) {
-                BulkResponse bulkResponse = bulkBuilder.execute().actionGet()
+                BulkResponse bulkResponse = esClient.bulk(bulkRequest)
                 if (bulkResponse.hasFailures()) ec.message.addError(bulkResponse.buildFailureMessage())
 
                 BulkItemResponse[] itemResponses = bulkResponse.getItems()
@@ -128,7 +132,11 @@ along with this software (see the LICENSE.md file). If not, see
     </service>
     <service verb="put" noun="DataDocumentMappings">
         <in-parameters><parameter name="indexName" required="true"/></in-parameters>
-        <actions><script>org.moqui.elasticsearch.ElasticSearchUtil.putIndexMappings(indexName, ec)</script></actions>
+        <actions><script>
+            import org.moqui.elasticsearch.EsClient
+            EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
+            esClient.putIndexMappings(indexName)
+        </script></actions>
     </service>
 
     <service verb="index" noun="DataFeedDocuments" authenticate="false" transaction-timeout="3600">
@@ -147,20 +155,22 @@ along with this software (see the LICENSE.md file). If not, see
                 <econdition field-name="dataFeedId"/></entity-find>
             <entity-find-one entity-name="moqui.entity.feed.DataFeed" value-field="df" cache="true"/>
             <if condition="df == null"><return type="danger" message="No DataFeed found for ID ${dataFeedId}"/></if>
+
             <set field="documentsIndexed" from="0"/>
             <script><![CDATA[
                 import org.moqui.context.ExecutionContext
-                import org.moqui.elasticsearch.ElasticSearchUtil
+                import org.moqui.elasticsearch.EsClient
                 import java.util.concurrent.Future
 
                 ExecutionContext ec = context.ec
+                EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
                 String feedReceiveServiceName = df.feedReceiveServiceName ?: 'org.moqui.search.SearchServices.index#DataDocuments'
 
                 for (Map dfDoc in dfDocList) {
                     ArrayList<Map> documentList = ec.entity.entityDataDocument.getDataDocuments(dfDoc.dataDocumentId, null, fromUpdateStamp, thruUpdatedStamp)
                     if (!documentList) continue
                     // make sure the index exists
-                    ElasticSearchUtil.checkCreateIndex((String) documentList.get(0).get("_index"), ec)
+                    esClient.checkCreateIndex((String) documentList.get(0).get("_index"))
 
                     // index the documents
                     int docListSize = documentList.size()
@@ -263,9 +273,9 @@ along with this software (see the LICENSE.md file). If not, see
         <actions><script><![CDATA[
             /* useful docs for query API: http://www.elasticsearch.org/guide/reference/api/search/uri-request/ */
 
-            import org.elasticsearch.client.Client
             import org.elasticsearch.action.get.MultiGetItemResponse
             import org.elasticsearch.action.get.MultiGetRequestBuilder
+            import org.elasticsearch.action.search.SearchRequest
             import org.elasticsearch.action.search.SearchRequestBuilder
             import org.elasticsearch.index.query.QueryBuilders
             import org.elasticsearch.search.SearchHit
@@ -275,18 +285,19 @@ along with this software (see the LICENSE.md file). If not, see
             import org.elasticsearch.search.sort.SortOrder
             import org.moqui.context.ExecutionContext
             import org.moqui.elasticsearch.ElasticSearchUtil
+            import org.moqui.elasticsearch.EsClient
 
             ExecutionContext ec = context.ec
-            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
+            EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
 
-            fromOffset = pageIndex * pageSize
-            sizeLimit = pageSize
+            int fromOffset = pageIndex * pageSize
+            int sizeLimit = pageSize
 
             documentList = []
             boolean hasHighlights = highlightFields != null && highlightFields.size() > 0
 
             // make sure index exists
-            if (!ElasticSearchUtil.checkIndexExists(indexName, ec)) {
+            if (!esClient.checkIndexExists(indexName)) {
                 ec.loggerFacade.warn("Tried to search with indexName ${indexName} that does not exist, returning empty list")
                 documentListCount = 0
                 documentListPageIndex = pageIndex
@@ -298,15 +309,18 @@ along with this software (see the LICENSE.md file). If not, see
             }
 
             // get the search hits
-            SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setFrom(fromOffset).setSize(sizeLimit)
-                    .setQuery(QueryBuilders.queryStringQuery((String) queryString).lenient(true).timeZone(TimeZone.default.getID()))
-                    .setFetchSource(true)
+            SearchRequest searchRequest = new SearchRequest(indexName)
+            searchRequest.source().from(fromOffset).size(sizeLimit).fetchSource(true)
+                    .query(QueryBuilders.queryStringQuery((String) queryString).lenient(true).timeZone(TimeZone.default.getID()))
+            // SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName).setFrom(fromOffset).setSize(sizeLimit)
+            //         .setQuery(QueryBuilders.queryStringQuery((String) queryString).lenient(true).timeZone(TimeZone.default.getID())).setFetchSource(true)
             if (hasHighlights) {
                 HighlightBuilder hb = new HighlightBuilder()
                 for (String hlField in highlightFields) hb.field(hlField)
-                srb.highlighter(hb)
+                searchRequest.source().highlighter(hb)
+                // srb.highlighter(hb)
             }
-            if (documentType) srb.setTypes(((String) documentType).split(","))
+            if (documentType) searchRequest.types(((String) documentType).split(","))
             for (String orderByField in orderByFields) {
                 boolean ascending = true
                 if (orderByField.charAt(0) == '-') {
@@ -317,10 +331,12 @@ along with this software (see the LICENSE.md file). If not, see
                     orderByField = orderByField.substring(1)
                 }
                 // ec.logger.warn("========= adding ${orderByField}, ${ascending}")
-                srb.addSort(orderByField, ascending ? SortOrder.ASC : SortOrder.DESC)
+                searchRequest.source().sort(orderByField, ascending ? SortOrder.ASC : SortOrder.DESC)
+                // srb.addSort(orderByField, ascending ? SortOrder.ASC : SortOrder.DESC)
             }
 
-            SearchHits hits = srb.execute().actionGet().getHits()
+            SearchHits hits = esClient.search(searchRequest).getHits()
+            // SearchHits hits = srb.execute().actionGet().getHits()
             for (SearchHit hit in hits) {
                 Map document = hit.getSourceAsMap()
                 if (flattenDocument) document = flattenNestedMap(document)
@@ -356,75 +372,4 @@ along with this software (see the LICENSE.md file). If not, see
             if (documentListPageRangeHigh > documentListCount) documentListPageRangeHigh = documentListCount
         ]]></script></actions>
     </service>
-
-    <!--
-        This service as it is no longer works with the castrated API in ElasticSearch 5.0.0
-        See the ElasticSearchUtil.aggregationSearch() and simpleAggSearch() methods
-
-    <service verb="search" noun="CountBySource">
-        <description>
-            Search documents with a "count" type search, meant for analytics searches with aggregations.
-            Use either the sourceJson or sourceMap parameters for the search source.
-
-            A good overview of the use of aggregations is available at: http://www.elastic.co/guide/en/elasticsearch/guide/current/aggregations.html
-
-            For detailed documentation of aggregations including all aggregation types see: http://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations.html
-        </description>
-        <in-parameters>
-            <parameter name="indexName" required="true"/>
-            <parameter name="documentTypeList" type="List">
-                <description>The ElasticSearch document type. For DataDocument based docs this is the dataDocumentId.</description>
-                <parameter name="documentType"/>
-            </parameter>
-            <parameter name="maxResults" type="Integer" default="1000"/>
-            <parameter name="sourceJson"><description>Search source as JSON String, pass this or sourceMap and not both</description></parameter>
-            <parameter name="sourceMap" type="Map"><description>Source source as Map (to convert to JSON), pass this or sourceJson and not both</description></parameter>
-        </in-parameters>
-        <out-parameters>
-            <parameter name="searchResponse" type="org.elasticsearch.action.search.SearchResponse"/>
-            <!- - Get this with "searchResponse.toString()" if needed: <parameter name="responseString"/> - ->
-        </out-parameters>
-        <actions><script><![CDATA[
-            import groovy.json.JsonBuilder
-            import groovy.json.JsonOutput
-            import org.elasticsearch.client.Client
-            import org.elasticsearch.action.search.SearchRequestBuilder
-            import org.elasticsearch.action.search.SearchResponse
-            import org.elasticsearch.index.query.QueryBuilders
-            import org.moqui.context.ExecutionContext
-            import org.moqui.elasticsearch.ElasticSearchUtil
-
-            ExecutionContext ec = context.ec
-
-            if (sourceJson && sourceMap) {
-                ec.message.addError("Both sourceJson and sourceMap passed, must pass one or the other")
-                return
-            }
-            if (sourceMap) {
-                JsonBuilder jb = new JsonBuilder()
-                jb.call((Map) sourceMap)
-                sourceJson = jb.toString()
-            }
-
-            ec.logger.warn("CountBySource in ${indexName} on ${documentTypeList} sourceJson: " + JsonOutput.prettyPrint((String) sourceJson))
-
-            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
-            // make sure index exists
-            if (!ElasticSearchUtil.checkIndexExists(indexName, ec)) {
-                ec.loggerFacade.warn("Tried to search with indexName ${indexName} that does not exist, returning null response")
-                return
-            }
-
-            // get the search hits (.setSearchType('count'))
-            SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices((String) indexName).setSize(maxResults)
-            if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
-            srb.setQuery(QueryBuilders.wrapperQuery((String) sourceJson))
-            ec.logger.warn("CountBySource srb: ${srb.toString()}")
-
-            searchResponse = srb.execute().actionGet()
-            // aggregations = searchResponse.getAggregations().getAsMap()
-            // responseString = searchResponse.toString()
-            ]]></script></actions>
-    </service>
-    -->
 </services>

@@ -28,30 +28,30 @@ along with this software (see the LICENSE.md file). If not, see
         <script><![CDATA[
             /* useful docs for query API: http://www.elasticsearch.org/guide/reference/api/search/uri-request/ */
 
-            import org.elasticsearch.client.Client
-            import org.elasticsearch.action.search.SearchRequestBuilder
+            import org.elasticsearch.action.search.SearchRequest
             import org.elasticsearch.index.query.QueryBuilders
             import org.elasticsearch.search.SearchHit
             import org.elasticsearch.search.SearchHits
             import org.elasticsearch.search.sort.SortOrder
             import org.moqui.context.ExecutionContext
+            import org.moqui.elasticsearch.EsClient
 
             ExecutionContext ec = context.ec
-            Client elasticSearchClient = ec.getTool("ElasticSearch", Client.class)
+            EsClient esClient = ec.getTool("ElasticSearch", EsClient.class)
 
-            fromOffset = pageIndex * pageSize
-            sizeLimit = pageSize
+            int fromOffset = pageIndex * pageSize
+            int sizeLimit = pageSize
 
             documentList = []
 
             // get the search hits
             queryString = queryString ?: '*'
-            SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
-                    .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setFrom(fromOffset).setSize(sizeLimit)
-                    .setFetchSource(true)
-            srb.addSort('@timestamp', SortOrder.DESC)
 
-            SearchHits hits = srb.get().getHits()
+            SearchRequest searchRequest = new SearchRequest(indexName)
+            searchRequest.source().from(fromOffset).size(sizeLimit).fetchSource(true)
+                    .query(QueryBuilders.queryStringQuery((String) queryString)).sort('@timestamp', SortOrder.DESC)
+
+            SearchHits hits = esClient.search(searchRequest).getHits()
             for (SearchHit hit in hits) {
                 Map document = hit.getSource()
                 document._id = hit.getId()
@@ -59,10 +59,9 @@ along with this software (see the LICENSE.md file). If not, see
             }
 
             // get the total search count
-            SearchRequestBuilder countSrb = elasticSearchClient.prepareSearch().setIndices(indexName)
-                    .setQuery(QueryBuilders.queryStringQuery((String) queryString)).setSize(0)
-            if (documentType) countSrb.setTypes((String) documentType)
-            documentListCount = countSrb.get().getHits().getTotalHits()
+            SearchRequest countSr = new SearchRequest(indexName)
+            countSr.source().size(0).query(QueryBuilders.queryStringQuery((String) queryString))
+            documentListCount = esClient.search(countSr).getHits().getTotalHits()
 
             // calculate the pagination values
             documentListPageIndex = pageIndex
