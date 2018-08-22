@@ -14,7 +14,10 @@
 package org.moqui.elasticsearch
 
 import groovy.transform.CompileStatic
+import org.apache.http.HttpHost
 import org.elasticsearch.client.Client
+import org.elasticsearch.client.RestClient
+import org.elasticsearch.client.RestHighLevelClient
 import org.elasticsearch.common.settings.Settings
 import org.moqui.context.ExecutionContextFactory
 import org.moqui.context.ToolFactory
@@ -35,10 +38,12 @@ class ElasticSearchToolFactory implements ToolFactory<EsClient> {
 
     /** ElasticSearch Node */
     protected org.elasticsearch.node.Node elasticSearchNode
-    /** ElasticSearch Client */
+    /** ElasticSearch Embedded Client */
     protected Client elasticSearchClient
+    /** ElasticSearch REST Client */
+    protected RestHighLevelClient restClient
     /** ES Client Wrapper */
-    protected EsClientJava esClient
+    protected EsClient esClient
 
     /** Default empty constructor */
     ElasticSearchToolFactory() { }
@@ -49,58 +54,72 @@ class ElasticSearchToolFactory implements ToolFactory<EsClient> {
     void init(ExecutionContextFactory ecf) {
         this.ecf = ecf
 
-        // set the ElasticSearch home (for config, modules, plugins, scripts, etc), data, and logs directories
-        // see https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-dir-layout.html
-        // NOTE: could use getPath() instead of toExternalForm().substring(5) for file specific URLs, will work on Windows?
-        String pathHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().toExternalForm().substring(5)
-        String pathData = ecf.runtimePath + "/elasticsearch/data"
-        String pathLogs = ecf.runtimePath + "/log"
-        logger.info("Starting ElasticSearch, home at ${pathHome}, data at ${pathData}, logs at ${pathLogs}")
-
-        // some code to cleanup the classpath, avoid jar hell IllegalStateException
-        String initialClassPath = System.getProperty("java.class.path")
-        StringBuilder newClassPathSb = new StringBuilder()
-        String pathSeparator = System.getProperty("path.separator")
-        Set<String> cpEntrySet = new HashSet<>()
-        if (initialClassPath) for (String cpEntry in initialClassPath.split(pathSeparator)) {
-            if (!cpEntry) {
-                logger.warn("Found empty classpath entry, removing as ElasticSearch jar hell will blow up")
-                continue
+        String esMode = System.getProperty("elasticsearch_mode")
+        if (esMode == "rest") {
+            ArrayList<HttpHost> hostList = new ArrayList<>()
+            for (int i = 1; i < 10; i++) {
+                String propVal = System.getProperty("elasticsearch_host" + i)
+                if (propVal) hostList.add(HttpHost.create(propVal))
             }
-            if (cpEntrySet.contains(cpEntry)) {
-                logger.warn("Found duplicate classpath entry ${cpEntry}, removing as ElasticSearch jar hell will blow up")
-                continue
+
+            logger.info("Initializing ElasticSearch RestHighLevelClient with hosts: ${hostList}")
+
+            restClient = new RestHighLevelClient(RestClient.builder(hostList.toArray(new HttpHost[0])))
+            esClient = new EsClientRest(restClient, (ExecutionContextFactoryImpl) ecf)
+        } else {
+            // set the ElasticSearch home (for config, modules, plugins, scripts, etc), data, and logs directories
+            // see https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-dir-layout.html
+            // NOTE: could use getPath() instead of toExternalForm().substring(5) for file specific URLs, will work on Windows?
+            String pathHome = ecf.resource.getLocationReference("component://moqui-elasticsearch/home").getUrl().toExternalForm().substring(5)
+            String pathData = ecf.runtimePath + "/elasticsearch/data"
+            String pathLogs = ecf.runtimePath + "/log"
+            logger.info("Starting ElasticSearch, home at ${pathHome}, data at ${pathData}, logs at ${pathLogs}")
+
+            // some code to cleanup the classpath, avoid jar hell IllegalStateException
+            String initialClassPath = System.getProperty("java.class.path")
+            StringBuilder newClassPathSb = new StringBuilder()
+            String pathSeparator = System.getProperty("path.separator")
+            Set<String> cpEntrySet = new HashSet<>()
+            if (initialClassPath) for (String cpEntry in initialClassPath.split(pathSeparator)) {
+                if (!cpEntry) {
+                    logger.warn("Found empty classpath entry, removing as ElasticSearch jar hell will blow up")
+                    continue
+                }
+                if (cpEntrySet.contains(cpEntry)) {
+                    logger.warn("Found duplicate classpath entry ${cpEntry}, removing as ElasticSearch jar hell will blow up")
+                    continue
+                }
+                cpEntrySet.add(cpEntry)
+                if (newClassPathSb.length() > 0) newClassPathSb.append(pathSeparator)
+                newClassPathSb.append(cpEntry)
             }
-            cpEntrySet.add(cpEntry)
-            if (newClassPathSb.length() > 0) newClassPathSb.append(pathSeparator)
-            newClassPathSb.append(cpEntry)
-        }
-        System.setProperty("java.class.path", newClassPathSb.toString())
-        // logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
+            System.setProperty("java.class.path", newClassPathSb.toString())
+            // logger.info("Before ElasticSearch java.class.path: ${System.getProperty('java.class.path')}")
 
-        // build the ES node
-        Settings.Builder settings = Settings.builder()
-        settings.put("path.home", pathHome)
-        settings.put("path.data", pathData)
-        settings.put("path.logs", pathLogs)
+            // build the ES node
+            Settings.Builder settings = Settings.builder()
+            settings.put("path.home", pathHome)
+            settings.put("path.data", pathData)
+            settings.put("path.logs", pathLogs)
 
-        // arbitrary elasticsearch config, always starts with `es_config.`, e.g `es_config.node.name` will set `node.name` in setting
-        for (String propName in System.getProperties().stringPropertyNames()) {
-            if (!propName.startsWith("es_config.") || !System.getProperty(propName)) continue
-            String esConfigName = propName.substring(10)
-            if (esConfigName) settings.put(esConfigName, System.getProperty(propName))
-        }
-        // do env vars after Java system properties so they override
-        for (String envName in System.getenv().keySet()) {
-            if (!envName.startsWith("es_config.")) continue
-            String esConfigName = envName.substring(10)
-            if (esConfigName) settings.put(esConfigName, System.getenv(envName))
-        }
+            // arbitrary elasticsearch config, always starts with `es_config.`, e.g `es_config.node.name` will set `node.name` in setting
+            for (String propName in System.getProperties().stringPropertyNames()) {
+                if (!propName.startsWith("es_config.") || !System.getProperty(propName)) continue
+                String esConfigName = propName.substring(10)
+                if (esConfigName) settings.put(esConfigName, System.getProperty(propName))
+            }
+            // do env vars after Java system properties so they override
+            for (String envName in System.getenv().keySet()) {
+                if (!envName.startsWith("es_config.")) continue
+                String esConfigName = envName.substring(10)
+                if (esConfigName) settings.put(esConfigName, System.getenv(envName))
+            }
 
-        elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
-        elasticSearchNode.start()
-        elasticSearchClient = elasticSearchNode.client()
-        esClient = new EsClientJava(elasticSearchClient, (ExecutionContextFactoryImpl) ecf)
+            elasticSearchNode = new org.elasticsearch.node.Node(settings.build())
+            elasticSearchNode.start()
+            elasticSearchClient = elasticSearchNode.client()
+            esClient = new EsClientJava(elasticSearchClient, (ExecutionContextFactoryImpl) ecf)
+        }
 
         // Index DataFeed with indexOnStartEmpty=Y
         EntityList dataFeedList = ecf.entity.find("moqui.entity.feed.DataFeed")
@@ -127,6 +146,11 @@ class ElasticSearchToolFactory implements ToolFactory<EsClient> {
 
     @Override
     void destroy() {
+        if (restClient != null) try {
+            restClient.close()
+            logger.info("ElasticSearch closed")
+        } catch (Throwable t) { logger.error("Error in ElasticSearch node close", t) }
+
         if (elasticSearchNode != null) try {
             elasticSearchNode.close()
             while (!elasticSearchNode.isClosed()) {

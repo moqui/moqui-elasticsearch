@@ -5,19 +5,17 @@
     <default-property name="kibana_host" value="localhost"/>
     <default-property name="kibana_port" value="5601"/>
 
-    <!-- ElasticSearch hosts for ElasticSearchRestToolFactory, looks for elasticsearch_host${[1-9]} -->
+    <!-- ElasticSearch modes:
+        embedded: full or coordinating node depending on configuration in elasticsearch.yml
+        rest: REST (over HTTP) client, uses ES Java REST Client
+    -->
+    <default-property name="elasticsearch_mode" value="embedded"/>
+    <!-- ElasticSearch hosts for elasticsearch_mode=rest, looks for elasticsearch_host${[1-9]} -->
     <default-property name="elasticsearch_host1" value="http://localhost:9200"/>
     <default-property name="elasticsearch_host2" value=""/>
 
     <tools>
-        <!-- NOTE: only enable ONE ElasticSearch ToolFactory; tool-factory elements are merged by the class
-            attribute so can set disabled to true or false in component or runtime Moqui Conf XML files -->
-
-        <!-- Embedded ES Node (master with data or coordinating only) -->
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchToolFactory" init-priority="15" disabled="false"/>
-        <!-- REST Client for external ES cluster (disabled by default) -->
-        <tool-factory class="org.moqui.elasticsearch.ElasticSearchRestToolFactory" init-priority="15" disabled="true"/>
-
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchLoggerToolFactory" init-priority="16" disabled="false"/>
     </tools>
     <webapp-list>
