@@ -180,6 +180,8 @@ class ElasticSearchUtil {
             Object valObj = entry.getValue()
             if (valObj instanceof Timestamp) {
                 entry.setValue(((Timestamp) valObj).getTime())
+            } else if (valObj instanceof java.sql.Date) {
+                entry.setValue(valObj.toString())
             } else if (valObj instanceof BigDecimal) {
                 entry.setValue(((BigDecimal) valObj).doubleValue())
             } else if (valObj instanceof GString) {

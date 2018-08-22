@@ -14,6 +14,14 @@
 package org.moqui.elasticsearch
 
 import groovy.transform.CompileStatic
+import org.apache.http.HttpEntity
+import org.apache.http.entity.ContentType
+import org.apache.http.nio.entity.NStringEntity
+import org.elasticsearch.action.admin.indices.alias.Alias
+import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest
+import org.elasticsearch.action.admin.indices.get.GetIndexRequest
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest
 import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.DeleteRequest
@@ -26,10 +34,11 @@ import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.action.update.UpdateResponse
+import org.elasticsearch.client.Response
 import org.elasticsearch.client.RestHighLevelClient
+import org.elasticsearch.common.xcontent.XContentHelper
+import org.elasticsearch.common.xcontent.XContentType
 import org.elasticsearch.index.query.QueryBuilder
-import org.elasticsearch.index.reindex.DeleteByQueryAction
-import org.elasticsearch.index.reindex.DeleteByQueryRequestBuilder
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
 import org.moqui.impl.context.ExecutionContextFactoryImpl
@@ -50,32 +59,26 @@ class EsClientRest implements EsClient {
 
     @Override
     boolean checkIndexExists(String indexName) {
-        /*
-        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return true
-        return client.admin().indices().prepareExists(indexName).get().exists
-        */
+        if (client.indices().existsAlias(new GetAliasesRequest(indexName))) return true
+        return client.indices().exists(new GetIndexRequest().indices(indexName))
     }
 
     @Override
     synchronized void checkCreateIndex(String indexName) {
-        /*
         // if the index alias exists call it good
-        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return
+        if (client.indices().exists(new GetIndexRequest().indices(indexName))) return
 
         EntityList ddList = ecfi.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", indexName).list()
         for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd)
-        */
     }
 
     @Override
     synchronized void checkCreateDocIndex(String dataDocumentId) {
-        /*
         String idxName = ElasticSearchUtil.ddIdToEsIndex(dataDocumentId)
-        if (client.admin().indices().prepareExists(idxName).get().exists) return
+        if (client.indices().exists(new GetIndexRequest().indices(idxName))) return
 
         EntityValue dd = ecfi.entityFacade.find("moqui.entity.document.DataDocument").condition("dataDocumentId", dataDocumentId).one()
         storeIndexAndMapping((String) dd.indexName, dd)
-        */
     }
 
     @Override
@@ -86,27 +89,24 @@ class EsClientRest implements EsClient {
 
     @Override
     void createIndex(String indexName, String docType, Map docMapping) {
-        // client.admin().indices().prepareCreate(indexName).addMapping(docType, docMapping).get()
+        client.indices().create(new CreateIndexRequest(indexName).mapping(docType, docMapping))
     }
 
     protected void storeIndexAndMapping(String indexName, EntityValue dd) {
         String dataDocumentId = (String) dd.getNoCheckSimple("dataDocumentId")
         String esIndexName = ElasticSearchUtil.ddIdToEsIndex(dataDocumentId)
-        /*
-        boolean hasIndex = client.admin().indices().prepareExists(esIndexName).get().exists
+
+        boolean hasIndex = client.indices().exists(new GetIndexRequest().indices(esIndexName))
         // logger.warn("========== Checking index ${esIndexName} with alias ${indexName} , hasIndex=${hasIndex}")
         Map docMapping = ElasticSearchUtil.makeElasticSearchMapping(dataDocumentId, ecfi.getEci())
         if (hasIndex) {
             logger.info("Updating ElasticSearch index ${esIndexName} for ${dataDocumentId} with alias ${indexName} document mapping")
-            client.admin().indices().preparePutMapping(esIndexName).setType(dataDocumentId).setSource(docMapping).get()
+            client.indices().putMapping(new PutMappingRequest(esIndexName).type(dataDocumentId).source(docMapping))
         } else {
             logger.info("Creating ElasticSearch index ${esIndexName} for ${dataDocumentId} with alias ${indexName} and adding document mapping")
-            client.admin().indices().prepareCreate(esIndexName).addMapping(dataDocumentId, docMapping).get()
+            client.indices().create(new CreateIndexRequest(esIndexName).mapping(dataDocumentId, docMapping).alias(new Alias(indexName)))
             // logger.warn("========== Added mapping for ${dataDocumentId} to index ${esIndexName}:\n${docMapping}")
-            // add an alias (indexName) for the index (dataDocumentId.toLowerCase())
-            client.admin().indices().prepareAliases().addAlias(esIndexName, indexName).get()
         }
-        */
     }
 
     @Override BulkResponse bulk(BulkRequest bulkRequest) { return client.bulk(bulkRequest) }
@@ -118,6 +118,28 @@ class EsClientRest implements EsClient {
 
     @Override
     long deleteByQuery(String indexName, String documentType, QueryBuilder filter) {
+        if (filter == null) return 0
+
+        String queryJson = "{ \"query\": " + filter.toString() + " }"
+        StringBuilder pathBuilder = new StringBuilder()
+        pathBuilder.append('/').append(indexName)
+        if (documentType) pathBuilder.append('/').append(documentType)
+        pathBuilder.append("/_delete_by_query")
+
+        // logger.warn("deleteByQuery ${pathBuilder}:\n${queryJson}")
+        HttpEntity entity = new NStringEntity(queryJson, ContentType.APPLICATION_JSON)
+        Response response = client.lowLevelClient.performRequest("POST", pathBuilder.toString(), new HashMap<String, String>(), entity)
+
+        InputStream is = response.getEntity().getContent()
+        try {
+            Map<String, Object> map = XContentHelper.convertToMap(XContentType.JSON.xContent(), is, true)
+            // logger.warn("deleteByQuery response ${map}")
+            long deleted = map.get("deleted") as long
+            return deleted
+        } finally {
+            is.close()
+        }
+
         /*
         DeleteByQueryRequestBuilder req = new DeleteByQueryRequestBuilder(client, DeleteByQueryAction.INSTANCE)
         req.source().setIndices(indexName).setQuery(filter)
