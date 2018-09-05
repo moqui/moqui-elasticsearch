@@ -13,6 +13,8 @@
     <!-- ElasticSearch hosts for elasticsearch_mode=rest, looks for elasticsearch_host${[1-9]} -->
     <default-property name="elasticsearch_host1" value="http://localhost:9200"/>
     <default-property name="elasticsearch_host2" value=""/>
+    <default-property name="elasticsearch_host3" value=""/>
+    <default-property name="elasticsearch_host4" value=""/>
 
     <tools>
         <tool-factory class="org.moqui.elasticsearch.ElasticSearchToolFactory" init-priority="15" disabled="false"/>
