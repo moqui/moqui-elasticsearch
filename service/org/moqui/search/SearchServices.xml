@@ -316,7 +316,12 @@ along with this software (see the LICENSE.md file). If not, see
             //         .setQuery(QueryBuilders.queryStringQuery((String) queryString).lenient(true).timeZone(TimeZone.default.getID())).setFetchSource(true)
             if (hasHighlights) {
                 HighlightBuilder hb = new HighlightBuilder()
-                for (String hlField in highlightFields) hb.field(hlField)
+                HashSet<String> fieldSet = new HashSet<>()
+                for (String hlField in highlightFields) {
+                    if (fieldSet.contains(hlField)) continue
+                    fieldSet.add(hlField)
+                    hb.field(hlField)
+                }
                 searchRequest.source().highlighter(hb)
                 // srb.highlighter(hb)
             }
