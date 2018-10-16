@@ -42,14 +42,20 @@ along with this software (see the LICENSE.md file). If not, see
             int fromOffset = pageIndex * pageSize
             int sizeLimit = pageSize
 
-            documentList = []
+            // build query string
+            ArrayList<Timestamp> tsList = ec.user.getPeriodRange("tsPeriod", context)
+            if (tsList != null && (tsList[0] != null || tsList[1] != null)) {
+                actualQuery = '@timestamp:[' + (tsList[0] != null ? tsList[0].time : '*') + ' TO ' + (tsList[1] != null ? tsList[1].time : '*') + ']'
+                if (queryString) actualQuery = actualQuery + ' AND (' + queryString + ')'
+            } else {
+                actualQuery = queryString ?: '*'
+            }
 
             // get the search hits
-            queryString = queryString ?: '*'
-
+            documentList = []
             SearchRequest searchRequest = new SearchRequest(indexName)
             searchRequest.source().from(fromOffset).size(sizeLimit).fetchSource(true)
-                    .query(QueryBuilders.queryStringQuery((String) queryString)).sort('@timestamp', SortOrder.DESC)
+                    .query(QueryBuilders.queryStringQuery((String) actualQuery)).sort('@timestamp', SortOrder.DESC)
 
             SearchHits hits = esClient.search(searchRequest).getHits()
             for (SearchHit hit in hits) {
@@ -60,7 +66,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             // get the total search count
             SearchRequest countSr = new SearchRequest(indexName)
-            countSr.source().size(0).query(QueryBuilders.queryStringQuery((String) queryString))
+            countSr.source().size(0).query(QueryBuilders.queryStringQuery((String) actualQuery))
             documentListCount = esClient.search(countSr).getHits().getTotalHits()
 
             // calculate the pagination values
@@ -81,9 +87,11 @@ along with this software (see the LICENSE.md file). If not, see
         <form-single name="SearchOptions" transition=".">
             <field name="indexName"><default-field title=""><text-line size="12" default-value="moqui_logs"/></default-field></field>
             <field name="queryString"><default-field title=""><text-line size="60"/></default-field></field>
+            <field name="tsPeriod"><default-field title=""><date-period time="true"/></default-field></field>
             <field name="submitButton"><default-field title="Search"><submit/></default-field></field>
-            <field-layout><field-row-big><field-ref name="indexName"/><field-ref name="queryString"/><field-ref name="submitButton"/></field-row-big></field-layout>
+            <field-layout><field-row-big><field-ref name="indexName"/><field-ref name="queryString"/><field-ref name="tsPeriod"/><field-ref name="submitButton"/></field-row-big></field-layout>
         </form-single>
+        <label text="Full query: ${actualQuery}" type="p"/>
 
         <form-list name="LogMessageDocuments" list="documentList" paginate="true" paginate-always-show="true" skip-form="true">
             <row-actions>
