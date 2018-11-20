@@ -327,6 +327,7 @@ along with this software (see the LICENSE.md file). If not, see
             }
             if (documentType) searchRequest.types(((String) documentType).split(","))
             for (String orderByField in orderByFields) {
+                orderByField = orderByField.trim()
                 boolean ascending = true
                 if (orderByField.charAt(0) == '-') {
                     ascending = false
@@ -335,7 +336,7 @@ along with this software (see the LICENSE.md file). If not, see
                     ascending = true
                     orderByField = orderByField.substring(1)
                 }
-                // ec.logger.warn("========= adding ${orderByField}, ${ascending}")
+                // ec.logger.warn("========= adding [${orderByField}], ${ascending}; from ${orderByFields}")
                 searchRequest.source().sort(orderByField, ascending ? SortOrder.ASC : SortOrder.DESC)
                 // srb.addSort(orderByField, ascending ? SortOrder.ASC : SortOrder.DESC)
             }
