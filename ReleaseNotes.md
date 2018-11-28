@@ -1,9 +1,19 @@
 
 # Moqui ElasticSearch Release Notes
 
-## Release 1.1.1 - Not Yet Released
+## Release 1.2.0 - Not Yet Released
 
-Moqui ElasticSearch 1.1.1 is a minor new feature and bug fix release.
+Moqui ElasticSearch 1.2.0 is a minor new feature and bug fix release.
+
+This integration now uses ElasticSearch 6.3.2. There were significant changes in ElasticSearch in version 6 that are handled in 
+this updated integration. Code that uses ElasticSearch directly may need to be updated, whereas code only using the index, search, 
+and other services from this component should work fine without changes. 
+
+By setting elasticsearch_mode to 'rest' and specifying at least elasticsearch_host1 the integration can now run without an embedded 
+node and against a remote cluster via the ElasticSearch REST API. Before this the recommended production approach when an external
+cluster was used was to have a processing only (no presistence) node running embedded in Moqui that joins the cluster. That can 
+still be done and is more efficient but increases load on app servers. The main reason for using the REST API mode is for 
+deployments such as on AWS ElasticSearch where joining a cluster is not possible.   
 
 On startup if a DataFeed has indexOnStartEmpty=Y and ES indexes for the feed do not exist the full feed will be indexed so that 
 indexes are populated based on relational database data for expected system operation.
