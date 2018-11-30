@@ -11,7 +11,7 @@ and other services from this component should work fine without changes.
 
 By setting elasticsearch_mode to 'rest' and specifying at least elasticsearch_host1 the integration can now run without an embedded 
 node and against a remote cluster via the ElasticSearch REST API. Before this the recommended production approach when an external
-cluster was used was to have a processing only (no presistence) node running embedded in Moqui that joins the cluster. That can 
+cluster was used was to have a processing only (no persistence) node running embedded in Moqui that joins the cluster. That can 
 still be done and is more efficient but increases load on app servers. The main reason for using the REST API mode is for 
 deployments such as on AWS ElasticSearch where joining a cluster is not possible.   
 
