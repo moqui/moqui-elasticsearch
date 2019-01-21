@@ -147,4 +147,6 @@ class EsClientRest implements EsClient {
         return req.get().getDeleted()
         */
     }
+
+    @Override Object getClient() { return client }
 }

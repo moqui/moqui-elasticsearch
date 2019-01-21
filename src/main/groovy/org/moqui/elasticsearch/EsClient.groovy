@@ -43,4 +43,6 @@ interface EsClient {
     DeleteResponse delete(DeleteRequest deleteRequest)
     SearchResponse search(SearchRequest searchRequest)
     long deleteByQuery(String indexName, String documentType, QueryBuilder filter)
+
+    Object getClient()
 }

@@ -115,4 +115,6 @@ class EsClientJava implements EsClient {
         if (documentType) req.source().setTypes(documentType)
         return req.get().getDeleted()
     }
+
+    @Override Object getClient() { return client }
 }
