@@ -30,6 +30,7 @@ import org.moqui.impl.context.ExecutionContextFactoryImpl
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @CompileStatic
 class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> {
@@ -37,6 +38,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
     // TODO: make this configurable somehow
     final static String INDEX_NAME = "moqui_logs"
     final static String DOC_TYPE = "LogMessage"
+    final static int QUEUE_LIMIT = 16384
 
     protected ExecutionContextFactoryImpl ecfi = null
     protected ElasticSearchSubscriber subscriber = null
@@ -44,6 +46,7 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
     private EsClient esClient = null
     private boolean disabled = false
     final ConcurrentLinkedQueue<Map> logMessageQueue = new ConcurrentLinkedQueue<>()
+    final AtomicBoolean flushRunning = new AtomicBoolean(false)
 
     /** Default empty constructor */
     ElasticSearchLoggerToolFactory() { }
@@ -64,7 +67,8 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             ecfi.registerLogEventSubscriber(subscriber)
 
             LogMessageQueueFlush lmqf = new LogMessageQueueFlush(this)
-            ecfi.scheduledExecutor.scheduleAtFixedRate(lmqf, 2, 1, TimeUnit.SECONDS)
+            // running every 3 seconds (was originally 1), might be good to have configurable as a higher value better for less busy servers, lower for busier
+            ecfi.scheduledExecutor.scheduleAtFixedRate(lmqf, 10, 3, TimeUnit.SECONDS)
         }
     }
     @Override void preFacadeInit(ExecutionContextFactory ecf) { }
@@ -86,6 +90,8 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
             if (factory.disabled || factory.esClient == null) return
             // NOTE: levels configurable in log4j2.xml but always exclude these
             if (Level.DEBUG.is(event.level) || Level.TRACE.is(event.level)) return
+            // if too many messages in queue start ignoring, likely means ElasticSearch not responding or not fast enough
+            if (factory.logMessageQueue.size() >= QUEUE_LIMIT) return
 
             Map<String, Object> msgMap = ['@timestamp':event.timeMillis, level:event.level.toString(), thread_name:event.threadName,
                     thread_id:event.threadId, thread_priority:event.threadPriority, logger_name:event.loggerName,
@@ -141,9 +147,16 @@ class ElasticSearchLoggerToolFactory implements ToolFactory<LogEventSubscriber> 
 
         LogMessageQueueFlush(ElasticSearchLoggerToolFactory factory) { this.factory = factory }
 
-        @Override synchronized void run() {
-            while (factory.logMessageQueue.size() > 0) {
-                flushQueue()
+        @Override void run() {
+            // if flag not false (expect param) return now, wait for next scheduled run
+            if (!factory.flushRunning.compareAndSet(false, true)) return
+
+            try {
+                while (factory.logMessageQueue.size() > 0) {
+                    flushQueue()
+                }
+            } finally {
+                factory.flushRunning.set(false)
             }
         }
         void flushQueue() {
