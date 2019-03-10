@@ -47,9 +47,9 @@ dependencies {
     // ElasticSearch Libraries, including Lucene
     compile 'org.elasticsearch:elasticsearch:6.3.2' // Apache 2.0
     // ElasticSearch uses jackson-dataformat-smile, -yaml, -cbor pulling in jackson-core, also used by OrientDB, but gets an older version
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.7'
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.7'
-    // now included in framework, also used by moqui-aws: compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.7'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.8'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.8'
+    // now included in framework, also used by moqui-aws: compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.8'
     // JNA, needed by ElasticSearch when running embedded, now included as a dependency: compile 'net.java.dev.jna:jna:4.5.0' // Apache 2.0
     // not currently needed/used: compile 'net.java.dev.jna:jna-platform:4.5.0' // Apache 2.0
 
