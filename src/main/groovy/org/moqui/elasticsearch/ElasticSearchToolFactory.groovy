@@ -130,7 +130,8 @@ class ElasticSearchToolFactory implements ToolFactory<EsClient> {
             boolean foundNotExists = false
             for (String indexName in indexNames) if (!esClient.checkIndexExists(indexName)) foundNotExists = true
             if (foundNotExists) {
-                String jobRunId = ecf.service.job("IndexDataFeedDocuments").parameter("dataFeedId", dataFeed.dataFeedId).run()
+                // NOTE: called with localOnly(true) to avoid issues during startup if a distributed executor service is configured
+                String jobRunId = ecf.service.job("IndexDataFeedDocuments").parameter("dataFeedId", dataFeed.dataFeedId).localOnly(true).run()
                 logger.info("Found index does not exist for DataFeed ${dataFeed.dataFeedId}, started job ${jobRunId} to index")
             }
         }
