@@ -26,7 +26,7 @@ along with this software (see the LICENSE.md file). If not, see
         <set field="pageSize" from="(pageSize?:'100') as int"/>
 
         <script><![CDATA[
-            /* useful docs for query API: http://www.elasticsearch.org/guide/reference/api/search/uri-request/ */
+            /* useful docs for query API: https://www.elastic.co/guide/reference/api/search/uri-request/ */
 
             import org.elasticsearch.action.search.SearchRequest
             import org.elasticsearch.index.query.QueryBuilders

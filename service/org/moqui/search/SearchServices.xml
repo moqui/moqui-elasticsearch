@@ -244,7 +244,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             Sort options are described here:
 
-            http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-request-sort.html
+            https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-sort.html
         </description>
         <in-parameters>
             <parameter name="indexName" required="true"/>
@@ -273,7 +273,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="documentListPageRangeHigh" type="Integer"/>
         </out-parameters>
         <actions><script><![CDATA[
-            /* useful docs for query API: http://www.elasticsearch.org/guide/reference/api/search/uri-request/ */
+            /* useful docs for query API: https://www.elastic.co/guide/reference/api/search/uri-request/ */
 
             import org.apache.lucene.search.join.ScoreMode
             import org.elasticsearch.action.get.MultiGetItemResponse
