@@ -1,6 +1,14 @@
 
 # Moqui ElasticSearch Release Notes
 
+## Release 1.2.1 - 23 July 2019
+
+Moqui ElasticSearch 1.2.1 is a patch level new feature and bug fix release.
+
+There are only minor changes and fixes in this release. For a complete list of changes see:
+
+https://github.com/moqui/moqui-elasticsearch/compare/v1.2.0...v1.2.1
+
 ## Release 1.2.0 - 29 Nov 2018
 
 Moqui ElasticSearch 1.2.0 is a minor new feature and bug fix release.
