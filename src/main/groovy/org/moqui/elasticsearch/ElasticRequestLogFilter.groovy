@@ -52,7 +52,11 @@ class ElasticRequestLogFilter implements Filter {
         ecfi = (ExecutionContextFactoryImpl) filterConfig.servletContext.getAttribute("executionContextFactory")
         if (ecfi == null) ecfi = (ExecutionContextFactoryImpl) Moqui.executionContextFactory
 
-        esClient = ecfi.getTool("ElasticSearch", EsClient.class)
+        try {
+            esClient = ecfi.getTool("ElasticSearch", EsClient.class)
+        } catch (Throwable t) {
+            logger.error("Error getting EsClient instance: ${t.toString()}")
+        }
         if (esClient == null) {
             logger.error("In ElasticRequestLogFilter init could not find ElasticSearch tool")
         } else {
