@@ -108,6 +108,7 @@ along with this software (see the LICENSE.md file). If not, see
                     BulkResponse bulkResponse = esClient.bulk(bulkRequest)
                     if (bulkResponse.hasFailures()) {
                         ec.message.addError(bulkResponse.buildFailureMessage())
+                        curBulkDocs = 0
                         break
                     }
 
