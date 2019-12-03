@@ -1,6 +1,20 @@
 
 # Moqui ElasticSearch Release Notes
 
+## Release 1.2.2 - Not Yet Released
+
+Moqui ElasticSearch 1.2.2 is a patch level new feature and bug fix release.
+
+There are only minor changes and fixes in this release. For a complete list of changes see:
+
+https://github.com/moqui/moqui-elasticsearch/compare/v1.2.1...v1.2.2
+
+This will be the last release of the moqui-elasticsearch tool component. It will no longer be supported by moqui-framework 
+after this release. It is being replaced by the new ElasticFacade in moqui-framework which uses a pure HTTP REST API client
+with no library dependencies to interact with one or more ElasticSearch clusters. With the new approach there will be no 
+support for an embedded ElasticSearch server, but it may be installed in the runtime/elasticsearch directory and started/stopped
+automatically in a separate process by the MoquiStart class.
+
 ## Release 1.2.1 - 23 July 2019
 
 Moqui ElasticSearch 1.2.1 is a patch level new feature and bug fix release.
