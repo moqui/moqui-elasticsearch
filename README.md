@@ -3,6 +3,12 @@
 [![license](http://img.shields.io/badge/license-CC0%201.0%20Universal-blue.svg)](https://github.com/moqui/moqui-elasticsearch/blob/master/LICENSE.md)
 [![release](http://img.shields.io/github/release/moqui/moqui-elasticsearch.svg)](https://github.com/moqui/moqui-elasticsearch/releases)
 
+**NOTE: following moqui-framework release 2.1.3 this component with embedded ElasticSearch is no longer supported. Instead the new
+ElasticFacade is included in the framework as a client to an external ElasticSearch instance which can be installed in
+runtime/elasticsearch and automatically started/stopped in a separate process by the MoquiStart class (executable WAR, not when
+WAR file dropped into Servlet container).**
+
+
 Moqui Tool Component for ElasticSearch. Useful for scalable faceted text search, and analytics and reporting using
 aggregations and other great features.
 
